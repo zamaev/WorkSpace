@@ -1,4 +1,5 @@
 data/
+.smoke/
 node_modules/
 backend/web/dist/*
 !backend/web/dist/.gitkeep

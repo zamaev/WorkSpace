@@ -52,6 +52,8 @@ export function TaskCard({
         <div className="pl-[27px] flex flex-col gap-2">
           <textarea
             className="ghost-input border border-line rounded-[10px] px-2.5 py-2 text-[12.5px] min-h-[56px] resize-y"
+            name="task-description"
+            aria-label="Описание задачи"
             placeholder="Описание…"
             defaultValue={task.description}
             onBlur={(e) => {

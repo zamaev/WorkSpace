@@ -195,6 +195,8 @@ export function TreeNode({
         <div style={{ marginLeft: depth * 22 + 54 }} className="pb-2 pr-4">
           <textarea
             className="ghost-input border border-line rounded-[10px] px-3 py-2 text-[13px] min-h-[64px] resize-y"
+            name="task-description"
+            aria-label="Описание задачи"
             placeholder="Описание…"
             defaultValue={task.description}
             autoFocus
@@ -229,6 +231,8 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
   return (
     <input
       className="ghost-input flex-1 text-[13.5px]"
+      name="task-title"
+      aria-label="Название задачи"
       value={value}
       autoFocus
       onChange={(e) => setValue(e.target.value)}
@@ -261,6 +265,8 @@ export function NewTaskInput({
       <span className="check opacity-40" aria-hidden="true" />
       <input
         className="ghost-input flex-1 text-[13.5px]"
+        name="new-task"
+        aria-label={placeholder}
         placeholder={placeholder}
         value={value}
         autoFocus={onClose !== undefined}

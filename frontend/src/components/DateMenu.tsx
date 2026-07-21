@@ -12,6 +12,7 @@ export function DateMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
   const today = todayISO();
 
   useEffect(() => {
@@ -59,14 +60,30 @@ export function DateMenu({
         ))}
       </div>
       <div className="mlabel mt-2 mb-1">Другая дата</div>
-      <input
-        type="date"
-        className="ghost-input border border-line rounded-[8px] px-2 py-1.5 text-[13px] [color-scheme:dark] [data-theme='light']:[color-scheme:light]"
-        defaultValue={current ?? ""}
-        onChange={(e) => {
-          if (e.target.value) pick(e.target.value);
-        }}
-      />
+      <div className="flex gap-2 items-center">
+        {/* дата применяется кнопкой, не onChange: date-инпут «валиден» уже
+            в процессе набора года, авто-применение ловит недописанную дату */}
+        <input
+          ref={dateRef}
+          type="date"
+          name="custom-date"
+          aria-label="Произвольная дата"
+          className="ghost-input border border-line rounded-[8px] px-2 py-1.5 text-[13px]"
+          defaultValue={current ?? ""}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && dateRef.current?.value) pick(dateRef.current.value);
+          }}
+        />
+        <button
+          type="button"
+          className="seg"
+          onClick={() => {
+            if (dateRef.current?.value) pick(dateRef.current.value);
+          }}
+        >
+          Ок
+        </button>
+      </div>
       {current && (
         <button type="button" className="pop-item mt-2 !text-over" onClick={() => pick(null)}>
           Снять дату

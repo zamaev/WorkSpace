@@ -93,6 +93,8 @@ export function DayColumn({ day }: { day: string }) {
       ))}
       <input
         className="ghost-input text-[13px] px-1 pt-1"
+        name="day-quick-add"
+        aria-label={`Новая задача на ${fmtDayHeader(day)}`}
         placeholder="＋ задача…"
         value={draft}
         disabled={busy}
