@@ -27,7 +27,7 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (typingTarget(e) || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "1") navigate("/");
+      if (e.key === "1") navigate("/projects");
       if (e.key === "2") navigate("/week");
     };
     window.addEventListener("keydown", onKey);
@@ -45,8 +45,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="topbar">
         <div className="mlabel mlabel-accent">WORKSPACE</div>
         <nav className="flex gap-2">
-          <NavLink to="/" end className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
-            Дерево
+          <NavLink to="/projects" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+            Проекты
           </NavLink>
           <NavLink to="/week" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Неделя

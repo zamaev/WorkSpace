@@ -392,45 +392,96 @@
     color: var(--accent);
   }
 
-  /* ── полоска недели внизу дерева ── */
+  /* ── маркёры цвета проекта (идиома space: цвет — маркёр, не заливка) ── */
 
-  .weekstrip {
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 18px;
-    z-index: 40;
-    width: min(1100px, calc(100vw - 48px));
-    display: flex;
-    align-items: stretch;
-    gap: 6px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 10px;
-    box-shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.5);
+  .sbar {
+    flex: none;
+    width: 3px;
+    height: 18px;
+    border-radius: 2px;
   }
-  .wcell {
-    flex: 1;
-    min-width: 0;
+  .sdot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* ── сайдбар проектов ── */
+
+  .projects-layout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .side {
+    width: 232px;
+    flex: none;
+    position: sticky;
+    top: 14px;
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 2px;
-    padding: 7px 4px;
+  }
+  .proj-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    padding: 4px 10px;
     border-radius: 10px;
-    border: 1px dashed transparent;
-    font-size: 12px;
     color: var(--dim);
+    font-size: 13.5px;
+    position: relative;
+    cursor: pointer;
   }
-  .wcell-today {
-    border-color: var(--accent);
-    color: var(--accent);
+  .proj-row:hover {
+    color: var(--text);
   }
-  .wcell-drop {
+  .proj-row-on {
     background: var(--asoft);
-    border-color: var(--accent);
-    border-style: solid;
+    color: var(--text);
+    font-weight: 600;
+  }
+  .proj-row .row-actions {
+    display: flex;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  .proj-row:hover .row-actions,
+  .proj-row:focus-within .row-actions {
+    opacity: 1;
+  }
+  .proj-row.drop-before::before,
+  .proj-row.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  /* кнопка-полоска цвета: тап-зона шире визуальных 3px */
+  .color-btn {
+    flex: none;
+    width: 14px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* палитра в поповере */
+  .swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 2px solid transparent;
+  }
+  .swatch-on {
+    border-color: var(--text);
   }
 
   /* ── неделя ── */

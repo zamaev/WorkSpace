@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check } from "../components/ui";
+import { Check, SBar } from "../components/ui";
 import { DateMenu } from "../components/DateMenu";
 import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
@@ -13,12 +13,14 @@ type DropZone = "before" | "into" | "after" | null;
 export function TreeNode({
   task,
   depth,
+  color,
   isOpen,
   toggleOpen,
   flashId,
 }: {
   task: Task;
   depth: number;
+  color: string;
   isOpen: (id: number) => boolean;
   toggleOpen: (id: number) => void;
   flashId: number | null;
@@ -117,6 +119,7 @@ export function TreeNode({
         >
           ▶
         </button>
+        <SBar color={color} />
         <Check done={task.done} label={task.done ? "Снять отметку" : "Отметить сделанной"} onClick={() => void patch(task.id, { done: !task.done })} />
         {renaming ? (
           <RenameInput
@@ -210,7 +213,15 @@ export function TreeNode({
 
       {open &&
         children.map((c) => (
-          <TreeNode key={c.id} task={c} depth={depth + 1} isOpen={isOpen} toggleOpen={toggleOpen} flashId={flashId} />
+          <TreeNode
+            key={c.id}
+            task={c}
+            depth={depth + 1}
+            color={color}
+            isOpen={isOpen}
+            toggleOpen={toggleOpen}
+            flashId={flashId}
+          />
         ))}
 
       {open && adding && (
