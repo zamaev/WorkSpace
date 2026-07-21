@@ -562,3 +562,39 @@ func TestProjectDates(t *testing.T) {
 		t.Errorf("start без due: %v", err)
 	}
 }
+
+func TestEndOn(t *testing.T) {
+	e := openTest(t)
+
+	// диапазон без начала — 422
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "x", ProjectID: &e.pid, EndOn: new("2026-07-25")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("endOn без scheduledOn: %v", err)
+	}
+	// конец раньше начала — 422
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "x", ProjectID: &e.pid, ScheduledOn: new("2026-07-25"), EndOn: new("2026-07-24")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("endOn < scheduledOn: %v", err)
+	}
+	// нормальный диапазон
+	a, _, err := CreateTask(e.db, CreateReq{Title: "span", ProjectID: &e.pid, ScheduledOn: new("2026-07-22"), EndOn: new("2026-07-24")})
+	if err != nil || a.EndOn == nil || *a.EndOn != "2026-07-24" {
+		t.Fatalf("создание диапазона: %v %+v", err, a)
+	}
+	// снятие плана обнуляет конец
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: nil}); err != nil {
+		t.Fatal(err)
+	}
+	if na := e.get(t, a.ID); na.ScheduledOn != nil || na.EndOn != nil {
+		t.Errorf("endOn не обнулился при снятии плана: %+v", na)
+	}
+	// patch: конец раньше начала — 422
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2026-07-25")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetEndOn: true, EndOn: new("2026-07-24")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("patch endOn < scheduledOn: %v", err)
+	}
+	// сдвиг диапазона целиком (оба поля одним PATCH)
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2026-07-27"), SetEndOn: true, EndOn: new("2026-07-29")}); err != nil {
+		t.Errorf("сдвиг диапазона: %v", err)
+	}
+}

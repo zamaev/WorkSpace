@@ -25,6 +25,7 @@ type Task struct {
 	Description string
 	Done        bool
 	ScheduledOn *string
+	EndOn       *string
 	DueOn       *string
 	Position    int
 	DayPosition *int
@@ -38,6 +39,7 @@ type CreateReq struct {
 	ParentID    *int64
 	ProjectID   *int64 // обязателен для корня; у ребёнка игнорируется (наследует)
 	ScheduledOn *string
+	EndOn       *string
 	DueOn       *string
 }
 
@@ -49,6 +51,8 @@ type UpdateReq struct {
 	Done           *bool
 	SetScheduledOn bool
 	ScheduledOn    *string
+	SetEndOn       bool
+	EndOn          *string
 	SetDueOn       bool
 	DueOn          *string
 	SetParentID    bool
@@ -92,6 +96,17 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	if r.DueOn != nil {
 		if err := validDate(*r.DueOn); err != nil {
 			return Task{}, nil, err
+		}
+	}
+	if r.EndOn != nil {
+		if err := validDate(*r.EndOn); err != nil {
+			return Task{}, nil, err
+		}
+		if r.ScheduledOn == nil {
+			return Task{}, nil, fmt.Errorf("%w: диапазону работы нужен день начала", ErrValidation)
+		}
+		if *r.EndOn < *r.ScheduledOn {
+			return Task{}, nil, fmt.Errorf("%w: конец работы раньше начала", ErrValidation)
 		}
 	}
 	if r.ScheduledOn != nil && r.DueOn != nil && *r.DueOn < *r.ScheduledOn {
@@ -150,9 +165,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 
 	ts := now()
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, due_on, position, day_position, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
-		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.DueOn, pos, dayPos, ts, ts,
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, position, day_position, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.EndOn, r.DueOn, pos, dayPos, ts, ts,
 	)
 	if err != nil {
 		return Task{}, nil, err
@@ -200,6 +215,11 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			return nil, err
 		}
 	}
+	if r.SetEndOn && r.EndOn != nil {
+		if err := validDate(*r.EndOn); err != nil {
+			return nil, err
+		}
+	}
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -227,17 +247,27 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if r.SetDueOn {
 		cur.DueOn = r.DueOn
 	}
-	// финальное состояние дат: дедлайн не может быть раньше плана
+	if r.SetEndOn {
+		cur.EndOn = r.EndOn
+	}
+	// финальное состояние дат: дедлайн не раньше плана, конец не раньше
+	// начала, диапазон без начала не существует
 	finalScheduled := cur.ScheduledOn
 	if r.SetScheduledOn {
 		finalScheduled = r.ScheduledOn
 	}
+	if finalScheduled == nil {
+		cur.EndOn = nil
+	}
 	if finalScheduled != nil && cur.DueOn != nil && *cur.DueOn < *finalScheduled {
 		return nil, fmt.Errorf("%w: дедлайн раньше запланированного дня", ErrValidation)
 	}
+	if cur.EndOn != nil && finalScheduled != nil && *cur.EndOn < *finalScheduled {
+		return nil, fmt.Errorf("%w: конец работы раньше начала", ErrValidation)
+	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, due_on = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, cur.DueOn, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, due_on = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.DueOn, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -461,13 +491,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, due_on, position, day_position, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, position, day_position, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.DueOn, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.DueOn, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
