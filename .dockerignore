@@ -1,0 +1,5 @@
+data/
+frontend/node_modules/
+backend/web/dist/
+docs/
+.git/
