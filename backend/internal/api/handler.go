@@ -20,6 +20,7 @@ type taskJSON struct {
 	Description string  `json:"description"`
 	Done        bool    `json:"done"`
 	ScheduledOn *string `json:"scheduledOn"`
+	DueOn       *string `json:"dueOn"`
 	Position    int     `json:"position"`
 	DayPosition *int    `json:"dayPosition"`
 	CreatedAt   string  `json:"createdAt"`
@@ -27,12 +28,14 @@ type taskJSON struct {
 }
 
 type projectJSON struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	Position  int    `json:"position"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID        int64   `json:"id"`
+	Name      string  `json:"name"`
+	Color     string  `json:"color"`
+	StartOn   *string `json:"startOn"`
+	DueOn     *string `json:"dueOn"`
+	Position  int     `json:"position"`
+	CreatedAt string  `json:"createdAt"`
+	UpdatedAt string  `json:"updatedAt"`
 }
 
 func toJSON(t store.Task) taskJSON {
@@ -65,6 +68,7 @@ type createBody struct {
 	ParentID    *int64  `json:"parentId"`
 	ProjectID   *int64  `json:"projectId"`
 	ScheduledOn *string `json:"scheduledOn"`
+	DueOn       *string `json:"dueOn"`
 }
 
 type patchBody struct {
@@ -72,6 +76,7 @@ type patchBody struct {
 	Description Opt[string] `json:"description"`
 	Done        Opt[bool]   `json:"done"`
 	ScheduledOn Opt[string] `json:"scheduledOn"`
+	DueOn       Opt[string] `json:"dueOn"`
 	ParentID    Opt[int64]  `json:"parentId"`
 	Position    Opt[int]    `json:"position"`
 	DayPosition Opt[int]    `json:"dayPosition"`
@@ -81,6 +86,8 @@ type projectBody struct {
 	Name     Opt[string] `json:"name"`
 	Color    Opt[string] `json:"color"`
 	Position Opt[int]    `json:"position"`
+	StartOn  Opt[string] `json:"startOn"`
+	DueOn    Opt[string] `json:"dueOn"`
 }
 
 func Handler(db *sql.DB) http.Handler {
@@ -132,9 +139,14 @@ func Handler(db *sql.DB) http.Handler {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		projects, err := store.UpdateProject(db, id, store.ProjectUpdate{
-			Name: b.Name.Val, Color: b.Color.Val, Position: b.Position.Val,
-		})
+		upd := store.ProjectUpdate{Name: b.Name.Val, Color: b.Color.Val, Position: b.Position.Val}
+		if b.StartOn.Set {
+			upd.SetStartOn, upd.StartOn = true, b.StartOn.Val
+		}
+		if b.DueOn.Set {
+			upd.SetDueOn, upd.DueOn = true, b.DueOn.Val
+		}
+		projects, err := store.UpdateProject(db, id, upd)
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -174,7 +186,7 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		task, affected, err := store.CreateTask(db, store.CreateReq{
 			Title: b.Title, Description: b.Description, ParentID: b.ParentID,
-			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn,
+			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn, DueOn: b.DueOn,
 		})
 		if err != nil {
 			writeErr(w, err)
@@ -203,6 +215,9 @@ func Handler(db *sql.DB) http.Handler {
 		// null у title/description/done/position — бессмысленен, игнорируем как отсутствие
 		if b.ScheduledOn.Set {
 			req.SetScheduledOn, req.ScheduledOn = true, b.ScheduledOn.Val
+		}
+		if b.DueOn.Set {
+			req.SetDueOn, req.DueOn = true, b.DueOn.Val
 		}
 		if b.ParentID.Set {
 			req.SetParentID, req.ParentID = true, b.ParentID.Val

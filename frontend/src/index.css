@@ -473,6 +473,132 @@
     justify-content: center;
   }
 
+  /* ── гант ── */
+
+  .gantt-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .g-canvas {
+    position: relative;
+    min-width: 100%;
+    width: max-content;
+  }
+  .g-row {
+    display: flex;
+    border-top: 1px solid var(--line);
+  }
+  .g-name {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    font-size: 13px;
+    min-width: 0;
+  }
+  .g-track {
+    position: relative;
+    flex: none;
+  }
+  .g-head .g-name,
+  .g-head .g-track {
+    border-top: none;
+  }
+  .g-month {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    padding: 5px 0 3px 8px;
+    border-left: 1px solid var(--line);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .g-day {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    color: var(--dim);
+    opacity: 0.75;
+    height: 20px;
+  }
+  .g-today {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+    opacity: 0.55;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .g-wknd {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .g-bar {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 16px;
+    border-radius: 8px;
+    cursor: grab;
+    z-index: 2;
+    touch-action: none;
+  }
+  .g-bar:active {
+    cursor: grabbing;
+  }
+  .g-bar-task {
+    height: 10px;
+    border-radius: 5px;
+  }
+  .g-edge {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 9px;
+    cursor: ew-resize;
+    z-index: 3;
+    touch-action: none;
+  }
+  .g-diamond {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-radius: 3px;
+    cursor: grab;
+    z-index: 2;
+    touch-action: none;
+  }
+  .g-diamond-task {
+    width: 10px;
+    height: 10px;
+  }
+  .g-setdates {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+
   /* палитра в поповере */
   .swatch {
     width: 22px;

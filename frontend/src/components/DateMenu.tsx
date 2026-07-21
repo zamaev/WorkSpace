@@ -2,12 +2,15 @@ import { useEffect, useRef } from "react";
 import { addDays, fmtDayChip, mondayOf, todayISO, weekDays } from "../lib/dates";
 
 // Поповер выбора даты: Сегодня · Завтра · дни текущей недели · календарь · Снять.
+// Используется и для плана (title «Дата»), и для дедлайна (title «Дедлайн»).
 export function DateMenu({
   current,
+  title = "Дата",
   onPick,
   onClose,
 }: {
   current: string | null;
+  title?: string;
   onPick: (iso: string | null) => void;
   onClose: () => void;
 }) {
@@ -37,7 +40,7 @@ export function DateMenu({
 
   return (
     <div ref={ref} className="popover" onClick={(e) => e.stopPropagation()}>
-      <div className="mlabel mb-2">Дата</div>
+      <div className="mlabel mb-2">{title}</div>
       <button type="button" className="pop-item" onClick={() => pick(today)}>
         <span>Сегодня</span>
         <span className="mmeta">{fmtDayChip(today)}</span>
@@ -86,7 +89,7 @@ export function DateMenu({
       </div>
       {current && (
         <button type="button" className="pop-item mt-2 !text-over" onClick={() => pick(null)}>
-          Снять дату
+          Снять
         </button>
       )}
     </div>

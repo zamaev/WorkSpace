@@ -15,15 +15,21 @@ type Project struct {
 	ID        int64
 	Name      string
 	Color     string
+	StartOn   *string
+	DueOn     *string
 	Position  int
 	CreatedAt string
 	UpdatedAt string
 }
 
 type ProjectUpdate struct {
-	Name     *string
-	Color    *string
-	Position *int
+	Name       *string
+	Color      *string
+	Position   *int
+	SetStartOn bool
+	StartOn    *string
+	SetDueOn   bool
+	DueOn      *string
 }
 
 func validProjectName(s string) error {
@@ -98,6 +104,16 @@ func UpdateProject(db *sql.DB, id int64, r ProjectUpdate) ([]Project, error) {
 			return nil, err
 		}
 	}
+	if r.SetStartOn && r.StartOn != nil {
+		if err := validDate(*r.StartOn); err != nil {
+			return nil, err
+		}
+	}
+	if r.SetDueOn && r.DueOn != nil {
+		if err := validDate(*r.DueOn); err != nil {
+			return nil, err
+		}
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
@@ -114,8 +130,17 @@ func UpdateProject(db *sql.DB, id int64, r ProjectUpdate) ([]Project, error) {
 	if r.Color != nil {
 		cur.Color = *r.Color
 	}
-	if _, err := tx.Exec(`UPDATE projects SET name = ?, color = ?, updated_at = ? WHERE id = ?`,
-		cur.Name, cur.Color, now(), id); err != nil {
+	if r.SetStartOn {
+		cur.StartOn = r.StartOn
+	}
+	if r.SetDueOn {
+		cur.DueOn = r.DueOn
+	}
+	if cur.StartOn != nil && cur.DueOn != nil && *cur.StartOn > *cur.DueOn {
+		return nil, fmt.Errorf("%w: старт проекта позже дедлайна", ErrValidation)
+	}
+	if _, err := tx.Exec(`UPDATE projects SET name = ?, color = ?, start_on = ?, due_on = ?, updated_at = ? WHERE id = ?`,
+		cur.Name, cur.Color, cur.StartOn, cur.DueOn, now(), id); err != nil {
 		return nil, err
 	}
 
@@ -178,13 +203,13 @@ func DeleteProject(db *sql.DB, id int64) (int, error) {
 	return int(n), tx.Commit()
 }
 
-const projectSelect = `SELECT id, name, color, position, created_at, updated_at FROM projects`
+const projectSelect = `SELECT id, name, color, start_on, due_on, position, created_at, updated_at FROM projects`
 
 func scanProjects(rows *sql.Rows) ([]Project, error) {
 	var out []Project
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Color, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Color, &p.StartOn, &p.DueOn, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

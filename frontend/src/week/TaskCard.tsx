@@ -5,6 +5,7 @@ import { useData } from "../data/DataProvider";
 import { breadcrumb } from "../data/selectors";
 import type { Task } from "../data/types";
 import { setDragTask } from "../tree/dnd";
+import { fmtDayChip, todayISO } from "../lib/dates";
 
 // Карточка задачи в колонке дня. dropBefore приходит от DayColumn —
 // подсветка «вставить перед этой карточкой».
@@ -23,6 +24,7 @@ export function TaskCard({
   const [openDetail, setOpenDetail] = useState(false);
   const crumb = breadcrumb(tasks, task.id);
   const color = projects.get(task.projectId)?.color ?? "var(--check)";
+  const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < todayISO();
 
   return (
     <div
@@ -49,7 +51,14 @@ export function TaskCard({
           {task.title}
         </button>
       </div>
-      {crumb && <div className="crumb pl-[27px]">{crumb}</div>}
+      {(crumb || task.dueOn) && (
+        <div className="flex items-center gap-2 pl-[27px] min-w-0">
+          {task.dueOn && (
+            <span className={`mmeta whitespace-nowrap ${dueOverdue ? "!text-over" : ""}`}>до {fmtDayChip(task.dueOn)}</span>
+          )}
+          {crumb && <span className="crumb flex-1">{crumb}</span>}
+        </div>
+      )}
       {openDetail && (
         <div className="pl-[27px] flex flex-col gap-2">
           <textarea

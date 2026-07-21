@@ -25,6 +25,7 @@ type Task struct {
 	Description string
 	Done        bool
 	ScheduledOn *string
+	DueOn       *string
 	Position    int
 	DayPosition *int
 	CreatedAt   string
@@ -37,6 +38,7 @@ type CreateReq struct {
 	ParentID    *int64
 	ProjectID   *int64 // обязателен для корня; у ребёнка игнорируется (наследует)
 	ScheduledOn *string
+	DueOn       *string
 }
 
 // UpdateReq — уже разобранное намерение PATCH: для nullable-полей пара
@@ -47,6 +49,8 @@ type UpdateReq struct {
 	Done           *bool
 	SetScheduledOn bool
 	ScheduledOn    *string
+	SetDueOn       bool
+	DueOn          *string
 	SetParentID    bool
 	ParentID       *int64
 	Position       *int
@@ -80,6 +84,11 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	}
 	if r.ScheduledOn != nil {
 		if err := validDate(*r.ScheduledOn); err != nil {
+			return Task{}, nil, err
+		}
+	}
+	if r.DueOn != nil {
+		if err := validDate(*r.DueOn); err != nil {
 			return Task{}, nil, err
 		}
 	}
@@ -129,9 +138,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 
 	ts := now()
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, position, day_position, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
-		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, pos, dayPos, ts, ts,
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, due_on, position, day_position, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.DueOn, pos, dayPos, ts, ts,
 	)
 	if err != nil {
 		return Task{}, nil, err
@@ -177,6 +186,11 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			return nil, err
 		}
 	}
+	if r.SetDueOn && r.DueOn != nil {
+		if err := validDate(*r.DueOn); err != nil {
+			return nil, err
+		}
+	}
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -201,9 +215,12 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if r.Done != nil {
 		cur.Done = *r.Done
 	}
+	if r.SetDueOn {
+		cur.DueOn = r.DueOn
+	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, due_on = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.DueOn, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -485,13 +502,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, position, day_position, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, due_on, position, day_position, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.DueOn, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
