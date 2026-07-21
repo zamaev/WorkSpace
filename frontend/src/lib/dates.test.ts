@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, fmtDayChip, fmtDayHeader, fmtWeekRange, mondayOf, weekDays } from "./dates";
+import { addDays, addMonths, fmtDayChip, fmtDayHeader, fmtMonthTitle, fmtWeekRange, mondayOf, monthCells, weekDays } from "./dates";
 
 describe("mondayOf", () => {
   it("будни и воскресенье схлопываются в один понедельник", () => {
@@ -40,5 +40,23 @@ describe("форматирование", () => {
   it("диапазон недели внутри месяца и через границу", () => {
     expect(fmtWeekRange("2026-07-20")).toBe("20–26 июля");
     expect(fmtWeekRange("2026-07-27")).toBe("27 июля – 2 августа");
+  });
+});
+
+describe("календарь", () => {
+  it("monthCells — 42 ячейки от понедельника, флаг месяца", () => {
+    const cells = monthCells("2026-07-15");
+    expect(cells).toHaveLength(42);
+    expect(cells[0].iso).toBe("2026-06-29"); // 1 июля 2026 — среда
+    expect(cells[0].inMonth).toBe(false);
+    expect(cells[2].iso).toBe("2026-07-01");
+    expect(cells[2].inMonth).toBe(true);
+  });
+  it("addMonths через границу года", () => {
+    expect(addMonths("2026-12-01", 1)).toBe("2027-01-01");
+    expect(addMonths("2026-01-01", -1)).toBe("2025-12-01");
+  });
+  it("fmtMonthTitle", () => {
+    expect(fmtMonthTitle("2026-07-01")).toBe("Июль 2026");
   });
 });

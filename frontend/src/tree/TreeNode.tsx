@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check, SBar } from "../components/ui";
-import { DateMenu } from "../components/DateMenu";
+import { AvatarDot, Check, SBar } from "../components/ui";
+import { DatePickerPopover } from "../components/DatePicker";
 import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
 import type { Task } from "../data/types";
@@ -28,7 +28,7 @@ export function TreeNode({
   selectedId: number | null;
   onSelect: (id: number) => void;
 }) {
-  const { tasks, create, patch } = useData();
+  const { tasks, types, people, create, patch } = useData();
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dateMenu, setDateMenu] = useState(false);
@@ -144,6 +144,12 @@ export function TreeNode({
             {task.title}
           </span>
         )}
+        {task.typeId !== null && types.get(task.typeId) && (
+          <span className="mlabel !opacity-70 whitespace-nowrap">{types.get(task.typeId)!.name}</span>
+        )}
+        {task.assigneeId !== null && people.get(task.assigneeId) && (
+          <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={17} />
+        )}
         {stats.total > 0 && (
           <span className="mmeta whitespace-nowrap" title="Сделано из прямых подзадач">
             {stats.done}/{stats.total}
@@ -165,9 +171,10 @@ export function TreeNode({
             </button>
           ) : null}
           {dateMenu && (
-            <DateMenu
-              current={task.scheduledOn}
-              endCurrent={task.endOn}
+            <DatePickerPopover
+              value={task.scheduledOn}
+              endValue={task.endOn}
+              title="План"
               onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
               onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
               onClose={() => setDateMenu(false)}
@@ -189,8 +196,8 @@ export function TreeNode({
             </button>
           ) : null}
           {dueMenu && (
-            <DateMenu
-              current={task.dueOn}
+            <DatePickerPopover
+              value={task.dueOn}
               title="Дедлайн"
               onPick={(iso) => void patch(task.id, { dueOn: iso })}
               onClose={() => setDueMenu(false)}

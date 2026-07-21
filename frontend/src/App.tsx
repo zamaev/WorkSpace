@@ -4,6 +4,7 @@ import { DataProvider } from "./data/DataProvider";
 import { ProjectsView } from "./tree/ProjectsView";
 import { WeekView } from "./week/WeekView";
 import { GanttView } from "./gantt/GanttView";
+import { TeamView } from "./team/TeamView";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
             <Route path="/projects/:pid?" element={<ProjectsView />} />
             <Route path="/week/:date?" element={<WeekView />} />
             <Route path="/gantt" element={<GanttView />} />
+            <Route path="/team" element={<TeamView />} />
             <Route path="*" element={<Navigate to="/projects" replace />} />
           </Routes>
         </Shell>

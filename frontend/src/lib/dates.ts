@@ -81,3 +81,36 @@ export function fmtWeekRange(mondayIso: string): string {
   }
   return `${a.getDate()} ${MONTHS_GEN[a.getMonth()]} – ${b.getDate()} ${MONTHS_GEN[b.getMonth()]}`;
 }
+
+const MONTHS_NOM = [
+  "Январь","Февраль","Март","Апрель","Май","Июнь",
+  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь",
+];
+
+// «Июль 2026» — заголовок месяца в календаре.
+export function fmtMonthTitle(monthIso: string): string {
+  const d = local(monthIso);
+  return `${MONTHS_NOM[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+export function firstOfMonth(iso: string): string {
+  return iso.slice(0, 8) + "01";
+}
+
+export function addMonths(monthIso: string, n: number): string {
+  const [y, m] = monthIso.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-01`;
+}
+
+// 42 ячейки (6 недель от понедельника) для сетки месяца.
+export function monthCells(monthIso: string): { iso: string; inMonth: boolean }[] {
+  const first = firstOfMonth(monthIso);
+  const start = mondayOf(first);
+  const month = first.slice(0, 7);
+  return Array.from({ length: 42 }, (_, i) => {
+    const iso = addDays(start, i);
+    return { iso, inMonth: iso.slice(0, 7) === month };
+  });
+}

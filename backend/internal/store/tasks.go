@@ -27,6 +27,8 @@ type Task struct {
 	ScheduledOn *string
 	EndOn       *string
 	DueOn       *string
+	TypeID      *int64
+	AssigneeID  *int64
 	Position    int
 	DayPosition *int
 	CreatedAt   string
@@ -41,6 +43,8 @@ type CreateReq struct {
 	ScheduledOn *string
 	EndOn       *string
 	DueOn       *string
+	TypeID      *int64
+	AssigneeID  *int64
 }
 
 // UpdateReq — уже разобранное намерение PATCH: для nullable-полей пара
@@ -59,6 +63,10 @@ type UpdateReq struct {
 	ParentID       *int64
 	SetProjectID   bool
 	ProjectID      *int64 // перенос в корень указанного проекта
+	SetTypeID      bool
+	TypeID         *int64
+	SetAssigneeID  bool
+	AssigneeID     *int64
 	Position       *int
 	DayPosition    *int
 }
@@ -163,11 +171,22 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 		dayPos = &p
 	}
 
+	if r.TypeID != nil {
+		if err := refExists(tx, "task_types", *r.TypeID); err != nil {
+			return Task{}, nil, ErrBadType
+		}
+	}
+	if r.AssigneeID != nil {
+		if err := refExists(tx, "people", *r.AssigneeID); err != nil {
+			return Task{}, nil, ErrBadPerson
+		}
+	}
+
 	ts := now()
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, position, day_position, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
-		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.EndOn, r.DueOn, pos, dayPos, ts, ts,
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.EndOn, r.DueOn, r.TypeID, r.AssigneeID, pos, dayPos, ts, ts,
 	)
 	if err != nil {
 		return Task{}, nil, err
@@ -250,6 +269,22 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if r.SetEndOn {
 		cur.EndOn = r.EndOn
 	}
+	if r.SetTypeID {
+		if r.TypeID != nil {
+			if err := refExists(tx, "task_types", *r.TypeID); err != nil {
+				return nil, ErrBadType
+			}
+		}
+		cur.TypeID = r.TypeID
+	}
+	if r.SetAssigneeID {
+		if r.AssigneeID != nil {
+			if err := refExists(tx, "people", *r.AssigneeID); err != nil {
+				return nil, ErrBadPerson
+			}
+		}
+		cur.AssigneeID = r.AssigneeID
+	}
 	// финальное состояние дат: дедлайн не раньше плана, конец не раньше
 	// начала, диапазон без начала не существует
 	finalScheduled := cur.ScheduledOn
@@ -266,8 +301,8 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		return nil, fmt.Errorf("%w: конец работы раньше начала", ErrValidation)
 	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, due_on = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.DueOn, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, due_on = ?, type_id = ?, assignee_id = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.DueOn, cur.TypeID, cur.AssigneeID, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -491,13 +526,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, position, day_position, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.DueOn, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

@@ -598,3 +598,74 @@ func TestEndOn(t *testing.T) {
 		t.Errorf("сдвиг диапазона: %v", err)
 	}
 }
+
+func TestTypesAndPeople(t *testing.T) {
+	e := openTest(t)
+
+	tp, err := CreateType(e.db, "Разработка")
+	if err != nil || tp.Position != 0 {
+		t.Fatalf("создание типа: %v %+v", err, tp)
+	}
+	if _, err := CreateType(e.db, "  "); !errors.Is(err, ErrValidation) {
+		t.Errorf("пустой тип: %v", err)
+	}
+	p, err := CreatePerson(e.db, "Айдрус", "#8fb56b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreatePerson(e.db, "x", "red"); !errors.Is(err, ErrValidation) {
+		t.Errorf("кривой цвет: %v", err)
+	}
+
+	// назначение на задачу
+	a := e.mk(t, "a", nil, nil)
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetTypeID: true, TypeID: &tp.ID, SetAssigneeID: true, AssigneeID: &p.ID}); err != nil {
+		t.Fatal(err)
+	}
+	na := e.get(t, a.ID)
+	if na.TypeID == nil || *na.TypeID != tp.ID || na.AssigneeID == nil || *na.AssigneeID != p.ID {
+		t.Errorf("назначение: %+v", na)
+	}
+	// несуществующие ссылки
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetTypeID: true, TypeID: new(int64(999))}); !errors.Is(err, ErrBadType) {
+		t.Errorf("плохой тип: %v", err)
+	}
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetAssigneeID: true, AssigneeID: new(int64(999))}); !errors.Is(err, ErrBadPerson) {
+		t.Errorf("плохой человек: %v", err)
+	}
+
+	// снятие null'ом
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetTypeID: true, TypeID: nil}); err != nil {
+		t.Fatal(err)
+	}
+	if na := e.get(t, a.ID); na.TypeID != nil {
+		t.Errorf("тип не снялся")
+	}
+
+	// удаление справочника снимает ссылки
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetTypeID: true, TypeID: &tp.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteType(e.db, tp.ID); err != nil {
+		t.Fatal(err)
+	}
+	if na := e.get(t, a.ID); na.TypeID != nil {
+		t.Errorf("после удаления типа ссылка осталась")
+	}
+	if err := DeletePerson(e.db, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if na := e.get(t, a.ID); na.AssigneeID != nil {
+		t.Errorf("после удаления человека исполнитель остался")
+	}
+
+	// rename
+	tp2, _ := CreateType(e.db, "QA")
+	if _, err := UpdateType(e.db, tp2.ID, "Тестирование"); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := ListTypes(e.db)
+	if len(types) != 1 || types[0].Name != "Тестирование" {
+		t.Errorf("типы: %+v", types)
+	}
+}

@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 // Подтверждение вторым кликом: первый клик «взводит» кнопку (краснеет,
-// текст меняется), второй — выполняет. Сбрасывается по уходу мыши или 3с.
+// текст меняется), второй — выполняет. Сброс — только по таймеру или
+// Escape: сброс по уходу мыши делал паттерн хрупким (реальная мышь между
+// кликами почти всегда чуть уходит с кнопки, и подтверждение тихо
+// слеталo — «задачи не удаляются»).
 export function ConfirmButton({
   children,
   confirmLabel = "точно?",
@@ -21,15 +24,19 @@ export function ConfirmButton({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!armed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setArmed(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [armed]);
+
+  useEffect(() => {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
-
-  const disarm = () => {
-    if (timer.current) clearTimeout(timer.current);
-    setArmed(false);
-  };
 
   return (
     <button
@@ -41,13 +48,13 @@ export function ConfirmButton({
         if (!armed) {
           setArmed(true);
           if (timer.current) clearTimeout(timer.current);
-          timer.current = setTimeout(() => setArmed(false), 3000);
+          timer.current = setTimeout(() => setArmed(false), 4000);
           return;
         }
-        disarm();
+        if (timer.current) clearTimeout(timer.current);
+        setArmed(false);
         onConfirm();
       }}
-      onMouseLeave={disarm}
     >
       {armed ? confirmLabel : children}
     </button>

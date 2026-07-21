@@ -22,6 +22,8 @@ type taskJSON struct {
 	ScheduledOn *string `json:"scheduledOn"`
 	EndOn       *string `json:"endOn"`
 	DueOn       *string `json:"dueOn"`
+	TypeID      *int64  `json:"typeId"`
+	AssigneeID  *int64  `json:"assigneeId"`
 	Position    int     `json:"position"`
 	DayPosition *int    `json:"dayPosition"`
 	CreatedAt   string  `json:"createdAt"`
@@ -70,6 +72,8 @@ type createBody struct {
 	Description string  `json:"description"`
 	ParentID    *int64  `json:"parentId"`
 	ProjectID   *int64  `json:"projectId"`
+	TypeID      *int64  `json:"typeId"`
+	AssigneeID  *int64  `json:"assigneeId"`
 	ScheduledOn *string `json:"scheduledOn"`
 	EndOn       *string `json:"endOn"`
 	DueOn       *string `json:"dueOn"`
@@ -84,6 +88,8 @@ type patchBody struct {
 	DueOn       Opt[string] `json:"dueOn"`
 	ParentID    Opt[int64]  `json:"parentId"`
 	ProjectID   Opt[int64]  `json:"projectId"`
+	TypeID      Opt[int64]  `json:"typeId"`
+	AssigneeID  Opt[int64]  `json:"assigneeId"`
 	Position    Opt[int]    `json:"position"`
 	DayPosition Opt[int]    `json:"dayPosition"`
 }
@@ -177,6 +183,134 @@ func Handler(db *sql.DB) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
 
+	// ── типы задач ──
+
+	mux.HandleFunc("GET /api/types", func(w http.ResponseWriter, r *http.Request) {
+		types, err := store.ListTypes(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		out := make([]map[string]any, len(types))
+		for i, t := range types {
+			out[i] = map[string]any{"id": t.ID, "name": t.Name, "position": t.Position}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"types": out})
+	})
+
+	mux.HandleFunc("POST /api/types", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		t, err := store.CreateType(db, b.Name)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"type": map[string]any{"id": t.ID, "name": t.Name, "position": t.Position}})
+	})
+
+	mux.HandleFunc("PATCH /api/types/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		t, err := store.UpdateType(db, id, b.Name)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"type": map[string]any{"id": t.ID, "name": t.Name, "position": t.Position}})
+	})
+
+	mux.HandleFunc("DELETE /api/types/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteType(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
+	// ── команда ──
+
+	mux.HandleFunc("GET /api/people", func(w http.ResponseWriter, r *http.Request) {
+		people, err := store.ListPeople(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		out := make([]map[string]any, len(people))
+		for i, p := range people {
+			out[i] = map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "position": p.Position}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"people": out})
+	})
+
+	mux.HandleFunc("POST /api/people", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		p, err := store.CreatePerson(db, b.Name, b.Color)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"person": map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "position": p.Position}})
+	})
+
+	mux.HandleFunc("PATCH /api/people/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b struct {
+			Name  Opt[string] `json:"name"`
+			Color Opt[string] `json:"color"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		p, err := store.UpdatePerson(db, id, store.PersonUpdate{Name: b.Name.Val, Color: b.Color.Val})
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"person": map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "position": p.Position}})
+	})
+
+	mux.HandleFunc("DELETE /api/people/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeletePerson(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
 	// ── задачи ──
 
 	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +331,7 @@ func Handler(db *sql.DB) http.Handler {
 		task, affected, err := store.CreateTask(db, store.CreateReq{
 			Title: b.Title, Description: b.Description, ParentID: b.ParentID,
 			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn, EndOn: b.EndOn, DueOn: b.DueOn,
+			TypeID: b.TypeID, AssigneeID: b.AssigneeID,
 		})
 		if err != nil {
 			writeErr(w, err)
@@ -237,6 +372,12 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		if b.ProjectID.Set {
 			req.SetProjectID, req.ProjectID = true, b.ProjectID.Val
+		}
+		if b.TypeID.Set {
+			req.SetTypeID, req.TypeID = true, b.TypeID.Val
+		}
+		if b.AssigneeID.Set {
+			req.SetAssigneeID, req.AssigneeID = true, b.AssigneeID.Val
 		}
 		tasks, err := store.UpdateTask(db, id, req)
 		if err != nil {
@@ -285,7 +426,8 @@ func writeErr(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 	case errors.Is(err, store.ErrValidation), errors.Is(err, store.ErrCycle),
 		errors.Is(err, store.ErrBadParent), errors.Is(err, store.ErrBadProject),
-		errors.Is(err, store.ErrProjectNotEmpty), errors.Is(err, store.ErrArchivedTarget):
+		errors.Is(err, store.ErrProjectNotEmpty), errors.Is(err, store.ErrArchivedTarget),
+		errors.Is(err, store.ErrBadType), errors.Is(err, store.ErrBadPerson):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 	default:
 		slog.Error("внутренняя ошибка api", "err", err)

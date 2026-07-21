@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { MLabel, SBar, SDot } from "../components/ui";
+import { MLabel, SBar, SDot, TrashIcon } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import { childProjects, projectSubtreeIds, projectUndone } from "../data/selectors";
 import { TaskDetails } from "../components/TaskDetails";
@@ -10,6 +10,44 @@ import { ConfirmButton } from "../components/ConfirmButton";
 import { TreeView } from "./TreeView";
 
 export const LAST_PROJECT_KEY = "workspace-last-project";
+const SIDE_W_KEY = "workspace-col-side";
+const INSP_W_KEY = "workspace-col-inspector";
+
+function readWidth(key: string, def: number, min: number, max: number): number {
+  try {
+    const v = Number(localStorage.getItem(key));
+    if (Number.isFinite(v) && v >= min && v <= max) return v;
+  } catch {
+    // приватный режим — дефолт
+  }
+  return def;
+}
+
+// Ручка изменения ширины колонки: pointer-drag, ширина через колбэк.
+// Сохранение делает сам onDelta: pointerup замыкал бы значение старого рендера.
+function ColResize({ onDelta }: { onDelta: (dx: number) => void }) {
+  const [active, setActive] = useState(false);
+  return (
+    <div
+      className={`col-resize ${active ? "col-resize-active" : ""}`}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        setActive(true);
+        let lastX = e.clientX;
+        const onMove = (ev: PointerEvent) => {
+          onDelta(ev.clientX - lastX);
+          lastX = ev.clientX;
+        };
+        const onUp = () => {
+          window.removeEventListener("pointermove", onMove);
+          setActive(false);
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp, { once: true });
+      }}
+    />
+  );
+}
 const PROJ_MIME = "application/x-workspace-project";
 const PROJ_CLOSED_KEY = "workspace-projects-closed";
 
@@ -36,6 +74,16 @@ export function ProjectsView() {
   const { pid } = useParams();
   const { projects, tasks, loading, offline, retry } = useData();
   const [selected, setSelected] = useState<number | null>(null);
+  const [sideW, setSideW] = useState(() => readWidth(SIDE_W_KEY, 232, 180, 400));
+  const [inspW, setInspW] = useState(() => readWidth(INSP_W_KEY, 300, 240, 440));
+
+  const saveWidth = (key: string, v: number) => {
+    try {
+      localStorage.setItem(key, String(v));
+    } catch {
+      // приватный режим — ширина не переживёт перезагрузку
+    }
+  };
 
   if (loading) {
     return <p className="text-[13px] text-dim">Загрузка…</p>;
@@ -73,8 +121,19 @@ export function ProjectsView() {
     selectedTask && current && selectedTask.projectId === current.id ? selected : null;
 
   return (
-    <div className="projects-layout">
-      <Sidebar currentId={current?.id ?? null} />
+    <div className="projects-layout !gap-0">
+      <div style={{ width: sideW }} className="flex-none">
+        <Sidebar currentId={current?.id ?? null} />
+      </div>
+      <ColResize
+        onDelta={(dx) =>
+          setSideW((w) => {
+            const nw = Math.min(400, Math.max(180, w + dx));
+            saveWidth(SIDE_W_KEY, nw);
+            return nw;
+          })
+        }
+      />
       {current ? (
         <TreeView key={current.id} project={current} selectedId={effectiveSelected} onSelect={setSelected} />
       ) : (
@@ -86,7 +145,18 @@ export function ProjectsView() {
         </div>
       )}
       {current && (
-        <aside className="inspector panel px-4 py-4">
+        <ColResize
+          onDelta={(dx) =>
+            setInspW((w) => {
+              const nw = Math.min(440, Math.max(240, w - dx));
+              saveWidth(INSP_W_KEY, nw);
+              return nw;
+            })
+          }
+        />
+      )}
+      {current && (
+        <aside className="inspector panel px-4 py-4" style={{ width: inspW }}>
           {effectiveSelected !== null ? (
             <TaskDetails taskId={effectiveSelected} variant="panel" onClose={() => setSelected(null)} />
           ) : (
@@ -145,7 +215,7 @@ function Sidebar({ currentId }: { currentId: number | null }) {
     .sort((a, b) => a.position - b.position || a.id - b.id);
 
   return (
-    <aside className="side">
+    <aside className="side !w-auto">
       <MLabel className="px-3 pb-2">Проекты</MLabel>
       {roots.map((p) => (
         <SidebarNode
@@ -409,7 +479,7 @@ function SidebarNode({
               title="Удалить проект (второй клик подтверждает)"
               onConfirm={() => void removeProject(project.id)}
             >
-              ✕
+              <TrashIcon />
             </ConfirmButton>
           ) : (
             <button
@@ -507,7 +577,7 @@ function ArchivedRow({ project, onOpen }: { project: Project; onOpen: (id: numbe
             title="Удалить (второй клик подтверждает)"
             onConfirm={() => void removeProject(project.id)}
           >
-            ✕
+            <TrashIcon />
           </ConfirmButton>
         )}
       </div>

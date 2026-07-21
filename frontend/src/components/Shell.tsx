@@ -30,6 +30,7 @@ export function Shell({ children }: { children: ReactNode }) {
       if (e.key === "1") navigate("/projects");
       if (e.key === "2") navigate("/week");
       if (e.key === "3") navigate("/gantt");
+      if (e.key === "4") navigate("/team");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -54,6 +55,9 @@ export function Shell({ children }: { children: ReactNode }) {
           </NavLink>
           <NavLink to="/gantt" title="Гант — клавиша 3" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Гант
+          </NavLink>
+          <NavLink to="/team" title="Команда — клавиша 4" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+            Команда
           </NavLink>
         </nav>
         <button
