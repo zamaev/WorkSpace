@@ -27,12 +27,12 @@ function loadOpen(): Set<number> {
 type Drag = {
   kind: "project" | "task";
   id: number;
-  mode: "move" | "left" | "right" | "single";
+  mode: "move" | "left" | "right" | "single" | "due";
   originX: number;
   delta: number;
 };
 
-// Итоговые границы фигуры с учётом drag-превью и клампов resize.
+// Итоговые границы фигуры проекта с учётом drag-превью и клампов resize.
 function applyDrag(start: string | null, end: string | null, drag: Drag | null, kind: string, id: number) {
   if (!drag || drag.kind !== kind || drag.id !== id || drag.delta === 0) return { start, end };
   const d = drag.delta;
@@ -49,8 +49,42 @@ function applyDrag(start: string | null, end: string | null, drag: Drag | null, 
       if (ne && start && ne < start) ne = start;
       return { start, end: ne };
     }
-    case "single":
+    default:
       return { start: start && addDays(start, d), end: end && addDays(end, d) };
+  }
+}
+
+// Три даты задачи с учётом drag-превью: диапазон работы двигается отдельно
+// от флажка дедлайна.
+function applyTaskDrag(
+  scheduled: string | null,
+  end: string | null,
+  due: string | null,
+  drag: Drag | null,
+  id: number,
+) {
+  if (!drag || drag.kind !== "task" || drag.id !== id || drag.delta === 0) return { scheduled, end, due };
+  const d = drag.delta;
+  switch (drag.mode) {
+    case "move":
+      return { scheduled: scheduled && addDays(scheduled, d), end: end && addDays(end, d), due };
+    case "left": {
+      let ns = scheduled && addDays(scheduled, d);
+      if (ns && end && ns > end) ns = end;
+      return { scheduled: ns, end, due };
+    }
+    case "right": {
+      let ne = end && addDays(end, d);
+      if (ne && scheduled && ne < scheduled) ne = scheduled;
+      return { scheduled, end: ne, due };
+    }
+    case "single":
+      return { scheduled: scheduled && addDays(scheduled, d), end, due };
+    case "due": {
+      let nd = due && addDays(due, d);
+      if (nd && scheduled && nd < scheduled) nd = scheduled;
+      return { scheduled, end, due: nd };
+    }
   }
 }
 
@@ -145,10 +179,11 @@ export function GanttView() {
       } else {
         const t = tasks.get(d.id);
         if (t) {
-          const next = applyDrag(t.scheduledOn, t.dueOn, d, "task", d.id);
-          const p: { scheduledOn?: string | null; dueOn?: string | null } = {};
-          if (next.start !== t.scheduledOn) p.scheduledOn = next.start ?? null;
-          if (next.end !== t.dueOn) p.dueOn = next.end ?? null;
+          const next = applyTaskDrag(t.scheduledOn, t.endOn, t.dueOn, d, d.id);
+          const p: { scheduledOn?: string | null; endOn?: string | null; dueOn?: string | null } = {};
+          if (next.scheduled !== t.scheduledOn) p.scheduledOn = next.scheduled ?? null;
+          if (next.end !== t.endOn) p.endOn = next.end ?? null;
+          if (next.due !== t.dueOn) p.dueOn = next.due ?? null;
           if (Object.keys(p).length > 0) void patch(d.id, p);
         }
       }
@@ -372,7 +407,7 @@ function ProjectRows({
         </div>
       </div>
       {flat.map(({ task, depth: taskDepth }) => {
-        const td = applyDrag(task.scheduledOn, task.dueOn, drag, "task", task.id);
+        const td = applyTaskDrag(task.scheduledOn, task.endOn, task.dueOn, drag, task.id);
         return (
           <div className={`g-row ${project.archived ? "opacity-50" : ""}`} style={{ height: TASK_ROW_H }} key={task.id}>
             <div className="g-name" style={{ width: NAME_W, paddingLeft: 34 + (depth + taskDepth) * 14 }}>
@@ -386,11 +421,11 @@ function ProjectRows({
             </div>
             <div className="g-track" style={{ width: totalW }}>
               <div className="g-wknd" style={{ backgroundImage: weekendBg }} />
-              <Figure
-                kind="task"
+              <TaskFigure
                 id={task.id}
-                start={td.start}
+                scheduled={td.scheduled}
                 end={td.end}
+                due={td.due}
                 color={project.color}
                 dim={task.done}
                 startDrag={startDrag}
@@ -469,4 +504,78 @@ function Figure({
     );
   }
   return null;
+}
+
+
+// Фигуры задачи: сплошная полоса — диапазон работы; ромб — один день;
+// контурный флажок — дедлайн; пунктирный хвост — запас до дедлайна.
+function TaskFigure({
+  id,
+  scheduled,
+  end,
+  due,
+  color,
+  dim,
+  startDrag,
+  scale,
+}: {
+  id: number;
+  scheduled: string | null;
+  end: string | null;
+  due: string | null;
+  color: string;
+  dim: boolean;
+  startDrag: (kind: "project" | "task", id: number, mode: Drag["mode"]) => (e: ReactPointerEvent) => void;
+  scale: Scale;
+}) {
+  const dimStyle = dim ? { opacity: 0.4 } : undefined;
+  const workEnd = end ?? scheduled;
+  return (
+    <>
+      {scheduled && end && (
+        <div
+          className="g-bar g-bar-task"
+          style={{
+            left: xOf(scale, scheduled) + 2,
+            width: (dayIndex(scale, end) - dayIndex(scale, scheduled) + 1) * DAY_W - 4,
+            background: `color-mix(in srgb, ${color} 46%, transparent)`,
+            border: `1px solid ${color}`,
+            ...dimStyle,
+          }}
+          title={`работа: ${scheduled} → ${end}`}
+          onPointerDown={startDrag("task", id, "move")}
+        >
+          <span className="g-edge" style={{ left: -4 }} onPointerDown={startDrag("task", id, "left")} />
+          <span className="g-edge" style={{ right: -4 }} onPointerDown={startDrag("task", id, "right")} />
+        </div>
+      )}
+      {scheduled && !end && (
+        <span
+          className="g-diamond g-diamond-task"
+          style={{ left: xOf(scale, scheduled) + DAY_W / 2, background: color, ...dimStyle }}
+          title={`план: ${scheduled}`}
+          onPointerDown={startDrag("task", id, "single")}
+        />
+      )}
+      {due && workEnd && due > workEnd && (
+        <span
+          className="g-tail"
+          style={{
+            left: xOf(scale, workEnd) + DAY_W / 2,
+            width: (dayIndex(scale, due) - dayIndex(scale, workEnd)) * DAY_W,
+            color,
+            ...dimStyle,
+          }}
+        />
+      )}
+      {due && (
+        <span
+          className="g-flag"
+          style={{ left: xOf(scale, due) + DAY_W / 2, color, ...dimStyle }}
+          title={`дедлайн: ${due}`}
+          onPointerDown={startDrag("task", id, "due")}
+        />
+      )}
+    </>
+  );
 }

@@ -391,6 +391,12 @@
     background: var(--asoft);
     color: var(--accent);
   }
+  /* поповер, раскрывающийся вправо от якоря (сайдбар, ячейки недели) */
+  .popover-left {
+    left: 0;
+    right: auto;
+    width: max-content;
+  }
 
   /* ── маркёры цвета проекта (идиома space: цвет — маркёр, не заливка) ── */
 
@@ -609,6 +615,30 @@
     transform: translateY(-50%);
     z-index: 2;
   }
+  /* контурный флажок дедлайна */
+  .g-flag {
+    position: absolute;
+    top: 50%;
+    width: 11px;
+    height: 11px;
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-radius: 3px;
+    border: 2px solid currentColor;
+    background: var(--panel);
+    cursor: grab;
+    z-index: 2;
+    touch-action: none;
+  }
+  /* пунктирный хвост от конца работы до дедлайна */
+  .g-tail {
+    position: absolute;
+    top: 50%;
+    height: 0;
+    border-top: 1.5px dashed currentColor;
+    opacity: 0.5;
+    z-index: 1;
+    pointer-events: none;
+  }
 
   /* палитра в поповере */
   .swatch {
@@ -659,6 +689,16 @@
   }
   .task-card:hover {
     border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  }
+  /* облегчённое «продолжение» многодневной задачи */
+  .span-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 9px;
+    border-radius: 9px;
+    border: 1px dashed var(--line);
+    color: var(--dim);
   }
   .task-card-done .task-title {
     color: var(--dim);

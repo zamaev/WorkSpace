@@ -155,11 +155,14 @@ export function TreeNode({
               title={chipOverdue ? "Просрочена" : "Изменить дату"}
             >
               {fmtDayChip(task.scheduledOn)}
+              {task.endOn ? ` → ${fmtDayChip(task.endOn)}` : ""}
             </button>
           ) : null}
           {dateMenu && (
             <DateMenu
               current={task.scheduledOn}
+              endCurrent={task.endOn}
+              onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
               onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
               onClose={() => setDateMenu(false)}
             />

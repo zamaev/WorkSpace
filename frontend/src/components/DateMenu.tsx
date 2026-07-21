@@ -6,16 +6,21 @@ import { addDays, fmtDayChip, mondayOf, todayISO, weekDays } from "../lib/dates"
 export function DateMenu({
   current,
   title = "Дата",
+  endCurrent,
+  onPickEnd,
   onPick,
   onClose,
 }: {
   current: string | null;
   title?: string;
+  endCurrent?: string | null;
+  onPickEnd?: (iso: string | null) => void;
   onPick: (iso: string | null) => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLInputElement>(null);
   const today = todayISO();
 
   useEffect(() => {
@@ -87,6 +92,52 @@ export function DateMenu({
           Ок
         </button>
       </div>
+      {onPickEnd && current && (
+        <>
+          <div className="mlabel mt-2 mb-1">Работаю по…</div>
+          <div className="flex gap-2 items-center">
+            <input
+              ref={endRef}
+              type="date"
+              name="end-date"
+              aria-label="Конец работы"
+              className="ghost-input border border-line rounded-[8px] px-2 py-1.5 text-[13px]"
+              defaultValue={endCurrent ?? ""}
+              min={current}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && endRef.current?.value) {
+                  onPickEnd(endRef.current.value);
+                  onClose();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="seg"
+              onClick={() => {
+                if (endRef.current?.value) {
+                  onPickEnd(endRef.current.value);
+                  onClose();
+                }
+              }}
+            >
+              Ок
+            </button>
+            {endCurrent && (
+              <button
+                type="button"
+                className="seg"
+                onClick={() => {
+                  onPickEnd(null);
+                  onClose();
+                }}
+              >
+                снять
+              </button>
+            )}
+          </div>
+        </>
+      )}
       {current && (
         <button type="button" className="pop-item mt-2 !text-over" onClick={() => pick(null)}>
           Снять

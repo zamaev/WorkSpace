@@ -28,6 +28,7 @@ function OverdueRow({ task, dateIso, children }: { task: Task; dateIso: string; 
 const OVERDUE_KEY = "workspace-overdue-collapsed";
 const QUICK_PROJECT_KEY = "workspace-quick-project";
 const WEEKENDS_KEY = "workspace-hide-weekends";
+const TWO_WEEKS_KEY = "workspace-two-weeks";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function readStoredId(key: string): number | null {
@@ -91,6 +92,23 @@ export function WeekView() {
       return !v;
     });
   };
+  const [twoWeeks, setTwoWeeks] = useState(() => {
+    try {
+      return localStorage.getItem(TWO_WEEKS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleTwoWeeks = () => {
+    setTwoWeeks((v) => {
+      try {
+        localStorage.setItem(TWO_WEEKS_KEY, v ? "0" : "1");
+      } catch {
+        // приватный режим — состояние не переживёт перезагрузку
+      }
+      return !v;
+    });
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -120,8 +138,10 @@ export function WeekView() {
   // задачи архивных проектов не показываем нигде в неделе
   const late = overdue(tasks, today).filter((t) => isTaskVisible(projects, t));
   const lateDue = overdueDeadline(tasks, today).filter((t) => isTaskVisible(projects, t));
-  const days = hideWeekends ? weekDays(monday).slice(0, 5) : weekDays(monday);
-  const empty = days.every(
+  const cut = hideWeekends ? 5 : 7;
+  const days = weekDays(monday).slice(0, cut);
+  const nextDays = twoWeeks ? weekDays(addDays(monday, 7)).slice(0, cut) : [];
+  const empty = [...days, ...nextDays].every(
     (d) => ![...tasks.values()].some((t) => t.scheduledOn === d && isTaskVisible(projects, t)),
   );
 
@@ -143,6 +163,9 @@ export function WeekView() {
         <div className="flex gap-2">
           <button type="button" className={`seg ${hideWeekends ? "" : "seg-on"}`} onClick={toggleWeekends} title="Показывать выходные">
             Сб–Вс
+          </button>
+          <button type="button" className={`seg ${twoWeeks ? "seg-on" : ""}`} onClick={toggleTwoWeeks} title="Показывать следующую неделю">
+            2 нед
           </button>
           <button type="button" className="icon-btn" onClick={() => navigate(`/week/${addDays(monday, -7)}`)} aria-label="Предыдущая неделя">
             ◂
@@ -193,11 +216,18 @@ export function WeekView() {
         </div>
       )}
 
-      <div className="week-grid">
+      <div className="week-grid" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
         {days.map((d) => (
           <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} />
         ))}
       </div>
+      {twoWeeks && (
+        <div className="week-grid pt-3" style={{ gridTemplateColumns: `repeat(${nextDays.length}, minmax(0, 1fr))` }}>
+          {nextDays.map((d) => (
+            <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} />
+          ))}
+        </div>
+      )}
       {empty && <p className="pt-4 text-[13px] text-dim text-center">На этой неделе пусто — перетащи задачи из дерева или добавь прямо в день.</p>}
     </div>
   );

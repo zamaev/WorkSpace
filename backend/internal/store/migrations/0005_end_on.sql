@@ -1,0 +1,1 @@
+ALTER TABLE tasks ADD COLUMN end_on TEXT;

@@ -20,6 +20,7 @@ type taskJSON struct {
 	Description string  `json:"description"`
 	Done        bool    `json:"done"`
 	ScheduledOn *string `json:"scheduledOn"`
+	EndOn       *string `json:"endOn"`
 	DueOn       *string `json:"dueOn"`
 	Position    int     `json:"position"`
 	DayPosition *int    `json:"dayPosition"`
@@ -70,6 +71,7 @@ type createBody struct {
 	ParentID    *int64  `json:"parentId"`
 	ProjectID   *int64  `json:"projectId"`
 	ScheduledOn *string `json:"scheduledOn"`
+	EndOn       *string `json:"endOn"`
 	DueOn       *string `json:"dueOn"`
 }
 
@@ -78,6 +80,7 @@ type patchBody struct {
 	Description Opt[string] `json:"description"`
 	Done        Opt[bool]   `json:"done"`
 	ScheduledOn Opt[string] `json:"scheduledOn"`
+	EndOn       Opt[string] `json:"endOn"`
 	DueOn       Opt[string] `json:"dueOn"`
 	ParentID    Opt[int64]  `json:"parentId"`
 	ProjectID   Opt[int64]  `json:"projectId"`
@@ -193,7 +196,7 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		task, affected, err := store.CreateTask(db, store.CreateReq{
 			Title: b.Title, Description: b.Description, ParentID: b.ParentID,
-			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn, DueOn: b.DueOn,
+			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn, EndOn: b.EndOn, DueOn: b.DueOn,
 		})
 		if err != nil {
 			writeErr(w, err)
@@ -222,6 +225,9 @@ func Handler(db *sql.DB) http.Handler {
 		// null у title/description/done/position — бессмысленен, игнорируем как отсутствие
 		if b.ScheduledOn.Set {
 			req.SetScheduledOn, req.ScheduledOn = true, b.ScheduledOn.Val
+		}
+		if b.EndOn.Set {
+			req.SetEndOn, req.EndOn = true, b.EndOn.Val
 		}
 		if b.DueOn.Set {
 			req.SetDueOn, req.DueOn = true, b.DueOn.Val
