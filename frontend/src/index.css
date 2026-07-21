@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+/*
+  Визуальный язык — перенос из space (Claude Design):
+  панель 18px · mono-caps метки · чекбоксы 7px-радиуса · акцент «приглушённое
+  золото» · вторичное — прозрачностью, не цветом · --over — единственный
+  алармовый (просрочка).
+  Токены двух тем; тема ставится boot-скриптом index.html и тумблером Shell
+  через data-theme на <html>. Тёмная — дефолт.
+*/
+
+:root {
+  --bg: #0e0f11;
+  --panel: #17191c;
+  --line: rgba(255, 255, 255, 0.07);
+  --text: #e9eaec;
+  --dim: #8a8f98;
+  --check: rgba(255, 255, 255, 0.24);
+  --accent: #c9a96a;
+  --asoft: rgba(201, 169, 106, 0.13);
+  --pos: #8fb56b;
+  --over: #c9736a;
+}
+[data-theme="light"] {
+  --bg: #fbfbfc;
+  --panel: #ffffff;
+  --line: rgba(15, 17, 20, 0.08);
+  --text: #17191c;
+  --dim: #6b7178;
+  --check: rgba(15, 17, 20, 0.24);
+  --accent: #9a7a3c;
+  --asoft: rgba(154, 122, 60, 0.1);
+  --pos: #4f7a2b;
+  --over: #a84438;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-ink: var(--text);
+  --color-dim: var(--dim);
+  --color-check: var(--check);
+  --color-accent: var(--accent);
+  --color-asoft: var(--asoft);
+  --color-pos: var(--pos);
+  --color-over: var(--over);
+  --font-sans: "Onest", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius-panel: 18px;
+  --radius-ctl: 12px;
+  --radius-box: 7px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Onest", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* ── идиомы space ── */
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+
+  .mlabel {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.5;
+  }
+  .mlabel-accent {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .mmeta {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  .check {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 1.5px solid var(--check);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease;
+  }
+  button.check {
+    position: relative;
+  }
+  /* тап-зона шире визуального квадрата, без сдвига layout */
+  button.check::after {
+    content: "";
+    position: absolute;
+    inset: -7px;
+  }
+  .check-sm {
+    width: 19px;
+    height: 19px;
+    border-radius: 6px;
+  }
+  .check-on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 5px 11px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip-accent {
+    background: var(--asoft);
+    color: var(--accent);
+    border-color: transparent;
+  }
+
+  .seg {
+    font-size: 12px;
+    padding: 7px 13px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    color: var(--dim);
+  }
+  .seg-on {
+    background: var(--asoft);
+    color: var(--accent);
+    border-color: transparent;
+    font-weight: 600;
+  }
+
+  /* ── оболочка ── */
+
+  .shell {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 0 24px 32px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 0 22px;
+  }
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 15px;
+  }
+  .icon-btn:hover {
+    color: var(--text);
+  }
+
+  /* ── тексты и поля ── */
+
+  .ghost-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    width: 100%;
+    min-width: 0;
+  }
+  .ghost-input::placeholder {
+    color: var(--dim);
+    opacity: 0.65;
+  }
+
+  .crumb {
+    font-size: 11px;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── toast и баннеры ── */
+
+  .toast {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 80;
+    background: var(--panel);
+    border: 1px solid var(--over);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 13px;
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.5);
+  }
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+    padding: 10px 16px;
+    border: 1px solid var(--over);
+    border-radius: 12px;
+    color: var(--over);
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+}
