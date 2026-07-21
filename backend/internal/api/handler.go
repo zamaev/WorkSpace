@@ -15,6 +15,7 @@ import (
 type taskJSON struct {
 	ID          int64   `json:"id"`
 	ParentID    *int64  `json:"parentId"`
+	ProjectID   int64   `json:"projectId"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Done        bool    `json:"done"`
@@ -23,6 +24,15 @@ type taskJSON struct {
 	DayPosition *int    `json:"dayPosition"`
 	CreatedAt   string  `json:"createdAt"`
 	UpdatedAt   string  `json:"updatedAt"`
+}
+
+type projectJSON struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color"`
+	Position  int    `json:"position"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 func toJSON(t store.Task) taskJSON {
@@ -37,10 +47,23 @@ func toJSONList(ts []store.Task) []taskJSON {
 	return out
 }
 
+func toProjectJSON(p store.Project) projectJSON {
+	return projectJSON(p)
+}
+
+func toProjectList(ps []store.Project) []projectJSON {
+	out := make([]projectJSON, len(ps))
+	for i, p := range ps {
+		out[i] = toProjectJSON(p)
+	}
+	return out
+}
+
 type createBody struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	ParentID    *int64  `json:"parentId"`
+	ProjectID   *int64  `json:"projectId"`
 	ScheduledOn *string `json:"scheduledOn"`
 }
 
@@ -54,12 +77,85 @@ type patchBody struct {
 	DayPosition Opt[int]    `json:"dayPosition"`
 }
 
+type projectBody struct {
+	Name     Opt[string] `json:"name"`
+	Color    Opt[string] `json:"color"`
+	Position Opt[int]    `json:"position"`
+}
+
 func Handler(db *sql.DB) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
+
+	// ── проекты ──
+
+	mux.HandleFunc("GET /api/projects", func(w http.ResponseWriter, r *http.Request) {
+		projects, err := store.ListProjects(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"projects": toProjectList(projects)})
+	})
+
+	mux.HandleFunc("POST /api/projects", func(w http.ResponseWriter, r *http.Request) {
+		var b projectBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		name, color := "", ""
+		if b.Name.Val != nil {
+			name = *b.Name.Val
+		}
+		if b.Color.Val != nil {
+			color = *b.Color.Val
+		}
+		p, err := store.CreateProject(db, name, color)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"project": toProjectJSON(p)})
+	})
+
+	mux.HandleFunc("PATCH /api/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b projectBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		projects, err := store.UpdateProject(db, id, store.ProjectUpdate{
+			Name: b.Name.Val, Color: b.Color.Val, Position: b.Position.Val,
+		})
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"projects": toProjectList(projects)})
+	})
+
+	mux.HandleFunc("DELETE /api/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		n, err := store.DeleteProject(db, id)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
+	})
+
+	// ── задачи ──
 
 	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
 		tasks, err := store.ListTasks(db)
@@ -76,14 +172,15 @@ func Handler(db *sql.DB) http.Handler {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		task, err := store.CreateTask(db, store.CreateReq{
-			Title: b.Title, Description: b.Description, ParentID: b.ParentID, ScheduledOn: b.ScheduledOn,
+		task, affected, err := store.CreateTask(db, store.CreateReq{
+			Title: b.Title, Description: b.Description, ParentID: b.ParentID,
+			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn,
 		})
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"task": toJSON(task)})
+		writeJSON(w, http.StatusCreated, map[string]any{"task": toJSON(task), "tasks": toJSONList(affected)})
 	})
 
 	mux.HandleFunc("PATCH /api/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +252,8 @@ func writeErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
-	case errors.Is(err, store.ErrValidation), errors.Is(err, store.ErrCycle), errors.Is(err, store.ErrBadParent):
+	case errors.Is(err, store.ErrValidation), errors.Is(err, store.ErrCycle),
+		errors.Is(err, store.ErrBadParent), errors.Is(err, store.ErrBadProject):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 	default:
 		slog.Error("внутренняя ошибка api", "err", err)

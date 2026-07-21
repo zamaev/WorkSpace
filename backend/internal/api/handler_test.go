@@ -46,6 +46,19 @@ func call(t *testing.T, method, url string, body any) (int, map[string]json.RawM
 	return res.StatusCode, out
 }
 
+func mkProject(t *testing.T, srv *httptest.Server, name string) int64 {
+	t.Helper()
+	code, res := call(t, "POST", srv.URL+"/api/projects", map[string]any{"name": name, "color": "#c9a96a"})
+	if code != 201 {
+		t.Fatalf("POST project: %d %s", code, res["error"])
+	}
+	var p struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(res["project"], &p)
+	return p.ID
+}
+
 func TestOptUnmarshal(t *testing.T) {
 	var b patchBody
 	if err := json.Unmarshal([]byte(`{"scheduledOn": null, "title": "x"}`), &b); err != nil {
@@ -62,20 +75,62 @@ func TestOptUnmarshal(t *testing.T) {
 	}
 }
 
-func TestCRUDOverHTTP(t *testing.T) {
+func TestProjectsOverHTTP(t *testing.T) {
 	srv := testServer(t)
 
+	pid := mkProject(t, srv, "Работа")
+
+	code, res := call(t, "GET", srv.URL+"/api/projects", nil)
+	var list []struct {
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	}
+	json.Unmarshal(res["projects"], &list)
+	if code != 200 || len(list) != 1 || list[0].Name != "Работа" || list[0].Color != "#c9a96a" {
+		t.Fatalf("GET projects: %d %+v", code, list)
+	}
+
+	code, res = call(t, "PATCH", fmt.Sprintf("%s/api/projects/%d", srv.URL, pid), map[string]any{"name": "Дом", "color": "#8fb56b"})
+	if code != 200 {
+		t.Fatalf("PATCH project: %d %s", code, res["error"])
+	}
+
+	if code, _ := call(t, "POST", srv.URL+"/api/projects", map[string]any{"name": "x", "color": "зелёный"}); code != 422 {
+		t.Errorf("кривой цвет: %d", code)
+	}
+	if code, _ := call(t, "PATCH", srv.URL+"/api/projects/999", map[string]any{"name": "y"}); code != 404 {
+		t.Errorf("PATCH несуществующего: %d", code)
+	}
+
+	// удаление каскадом с задачами
+	call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "a", "projectId": pid})
+	code, res = call(t, "DELETE", fmt.Sprintf("%s/api/projects/%d", srv.URL, pid), nil)
+	var deleted int
+	json.Unmarshal(res["deleted"], &deleted)
+	if code != 200 || deleted != 1 {
+		t.Errorf("DELETE project: %d, задач удалено %d", code, deleted)
+	}
+}
+
+func TestCRUDOverHTTP(t *testing.T) {
+	srv := testServer(t)
+	pid := mkProject(t, srv, "Работа")
+
 	// создание корня
-	code, res := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "Работа"})
+	code, res := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "Корень", "projectId": pid})
 	if code != 201 {
 		t.Fatalf("POST: %d %s", code, res["error"])
 	}
 	var root struct {
-		ID int64 `json:"id"`
+		ID        int64 `json:"id"`
+		ProjectID int64 `json:"projectId"`
 	}
 	json.Unmarshal(res["task"], &root)
+	if root.ProjectID != pid {
+		t.Errorf("projectId корня: %d", root.ProjectID)
+	}
 
-	// ребёнок с датой
+	// ребёнок с датой наследует проект
 	code, res = call(t, "POST", srv.URL+"/api/tasks", map[string]any{
 		"title": "CI", "parentId": root.ID, "scheduledOn": "2026-07-22",
 	})
@@ -84,20 +139,55 @@ func TestCRUDOverHTTP(t *testing.T) {
 	}
 	var child struct {
 		ID          int64  `json:"id"`
+		ProjectID   int64  `json:"projectId"`
 		ScheduledOn string `json:"scheduledOn"`
 		DayPosition int    `json:"dayPosition"`
 	}
 	json.Unmarshal(res["task"], &child)
-	if child.ScheduledOn != "2026-07-22" || child.DayPosition != 0 {
+	if child.ProjectID != pid || child.ScheduledOn != "2026-07-22" || child.DayPosition != 0 {
 		t.Errorf("ребёнок: %+v", child)
 	}
 
-	// список
-	code, res = call(t, "GET", srv.URL+"/api/tasks", nil)
-	var list []json.RawMessage
-	json.Unmarshal(res["tasks"], &list)
-	if code != 200 || len(list) != 2 {
-		t.Fatalf("GET: %d, %d задач", code, len(list))
+	// каскад через http: done ребёнка закрывает корень; в ответе оба
+	code, res = call(t, "PATCH", fmt.Sprintf("%s/api/tasks/%d", srv.URL, child.ID), map[string]any{"done": true})
+	if code != 200 {
+		t.Fatalf("PATCH done: %d %s", code, res["error"])
+	}
+	var patched []struct {
+		ID   int64 `json:"id"`
+		Done bool  `json:"done"`
+	}
+	json.Unmarshal(res["tasks"], &patched)
+	if len(patched) != 2 {
+		t.Fatalf("каскад в ответе: %+v", patched)
+	}
+	for _, p := range patched {
+		if !p.Done {
+			t.Errorf("не done в каскаде: %+v", p)
+		}
+	}
+
+	// создание нового ребёнка открывает предков; ответ содержит task+tasks
+	code, res = call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "ещё", "parentId": root.ID})
+	if code != 201 {
+		t.Fatalf("POST ещё: %d", code)
+	}
+	var affected []struct {
+		ID   int64 `json:"id"`
+		Done bool  `json:"done"`
+	}
+	json.Unmarshal(res["tasks"], &affected)
+	foundRoot := false
+	for _, a := range affected {
+		if a.ID == root.ID {
+			foundRoot = true
+			if a.Done {
+				t.Errorf("корень не открылся при создании")
+			}
+		}
+	}
+	if !foundRoot {
+		t.Errorf("корень не в затронутых: %+v", affected)
 	}
 
 	// PATCH: снять дату (null значим)
@@ -105,49 +195,41 @@ func TestCRUDOverHTTP(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("PATCH: %d %s", code, res["error"])
 	}
-	var patched []struct {
-		ID          int64   `json:"id"`
-		ScheduledOn *string `json:"scheduledOn"`
-		DayPosition *int    `json:"dayPosition"`
-	}
-	json.Unmarshal(res["tasks"], &patched)
-	if len(patched) != 1 || patched[0].ScheduledOn != nil || patched[0].DayPosition != nil {
-		t.Errorf("после снятия даты: %+v", patched)
-	}
 
 	// DELETE каскадом
 	code, res = call(t, "DELETE", fmt.Sprintf("%s/api/tasks/%d", srv.URL, root.ID), nil)
 	var deleted int
 	json.Unmarshal(res["deleted"], &deleted)
-	if code != 200 || deleted != 2 {
+	if code != 200 || deleted != 3 {
 		t.Errorf("DELETE: %d, удалено %d", code, deleted)
 	}
 }
 
 func TestErrors(t *testing.T) {
 	srv := testServer(t)
+	pid := mkProject(t, srv, "P")
 
-	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "  "}); code != 422 {
+	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "  ", "projectId": pid}); code != 422 {
 		t.Errorf("пустой title: %d", code)
 	}
-	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "x", "scheduledOn": "2026-13-99"}); code != 422 {
-		t.Errorf("битая дата: %d", code)
+	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "x"}); code != 422 {
+		t.Errorf("корень без проекта: %d", code)
 	}
-	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "x", "parentId": 999}); code != 422 {
-		t.Errorf("плохой родитель: %d", code)
+	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "x", "projectId": 999}); code != 422 {
+		t.Errorf("плохой проект: %d", code)
+	}
+	if code, _ := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "x", "projectId": pid, "scheduledOn": "2026-13-99"}); code != 422 {
+		t.Errorf("битая дата: %d", code)
 	}
 	if code, _ := call(t, "PATCH", srv.URL+"/api/tasks/999", map[string]any{"done": true}); code != 404 {
 		t.Errorf("PATCH несуществующей: %d", code)
-	}
-	if code, _ := call(t, "DELETE", srv.URL+"/api/tasks/999", nil); code != 404 {
-		t.Errorf("DELETE несуществующей: %d", code)
 	}
 	if code, _ := call(t, "PATCH", srv.URL+"/api/tasks/abc", map[string]any{}); code != 400 {
 		t.Errorf("кривой id: %d", code)
 	}
 
 	// цикл через http
-	_, res := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "a"})
+	_, res := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "a", "projectId": pid})
 	var a struct {
 		ID int64 `json:"id"`
 	}

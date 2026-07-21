@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -35,8 +36,23 @@ func Open(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+// migrate выполняет миграции на выделенном соединении с выключенными FK:
+// миграции пересоздают таблицы (rebuild-паттерн sqlite), при включённых FK
+// порядок вставки строк дерева вызывал бы ложные нарушения.
 func migrate(db *sql.DB) error {
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY)`); err != nil {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("соединение для миграций: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
+		return fmt.Errorf("отключение fk: %w", err)
+	}
+	defer conn.ExecContext(ctx, `PRAGMA foreign_keys=ON`)
+
+	if _, err := conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY)`); err != nil {
 		return fmt.Errorf("таблица миграций: %w", err)
 	}
 	entries, err := migrationsFS.ReadDir("migrations")
@@ -50,7 +66,7 @@ func migrate(db *sql.DB) error {
 	sort.Strings(names)
 	for _, name := range names {
 		var applied int
-		if err := db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version = ?`, name).Scan(&applied); err != nil {
+		if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE version = ?`, name).Scan(&applied); err != nil {
 			return fmt.Errorf("проверка миграции %s: %w", name, err)
 		}
 		if applied > 0 {
@@ -60,7 +76,7 @@ func migrate(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("чтение миграции %s: %w", name, err)
 		}
-		tx, err := db.Begin()
+		tx, err := conn.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
