@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { AvatarDot, Check, SBar } from "../components/ui";
+import { TypeBadge } from "../components/TypeBadge";
 import { DatePickerPopover } from "../components/DatePicker";
 import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
@@ -144,9 +145,7 @@ export function TreeNode({
             {task.title}
           </span>
         )}
-        {task.typeId !== null && types.get(task.typeId) && (
-          <span className="mlabel !opacity-70 whitespace-nowrap">{types.get(task.typeId)!.name}</span>
-        )}
+        {task.typeId !== null && types.get(task.typeId) && <TypeBadge type={types.get(task.typeId)!} />}
         {task.assigneeId !== null && people.get(task.assigneeId) && (
           <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={17} />
         )}
@@ -175,6 +174,7 @@ export function TreeNode({
               value={task.scheduledOn}
               endValue={task.endOn}
               title="План"
+              allowRange
               onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
               onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
               onClose={() => setDateMenu(false)}

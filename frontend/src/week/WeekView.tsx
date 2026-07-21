@@ -230,7 +230,7 @@ export function WeekView() {
           ))}
         </div>
       )}
-      {modalTask !== null && <TaskModal taskId={modalTask} onClose={() => setModalTask(null)} />}
+      {modalTask !== null && <TaskModal taskId={modalTask} showCrumb onClose={() => setModalTask(null)} />}
       {empty && <p className="pt-4 text-[13px] text-dim text-center">На этой неделе пусто — перетащи задачи из дерева или добавь прямо в день.</p>}
     </div>
   );

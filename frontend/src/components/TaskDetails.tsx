@@ -6,24 +6,35 @@ import { fmtDayChip, todayISO } from "../lib/dates";
 import { plural } from "../lib/plural";
 import { AvatarDot, Check, MLabel, SDot, TrashIcon } from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
+import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker } from "./DatePicker";
+import { TypeBadge } from "./TypeBadge";
+
+type PickerKind = "plan" | "due" | "type" | "assignee" | null;
 
 // Детали задачи: панель-инспектор в «Проектах» и модал в «Неделе»/«Ганте».
+// Все меню — маленькие fixed-попапы у якорной кнопки: ничего не смещают
+// и не обрезаются в модале.
 export function TaskDetails({
   taskId,
   variant,
+  showCrumb = false,
   onClose,
 }: {
   taskId: number;
   variant: "panel" | "modal";
+  showCrumb?: boolean;
   onClose: () => void;
 }) {
-  const { tasks, projects, types, people, patch, remove, createType } = useData();
+  const { tasks, projects, types, people, patch, remove } = useData();
   const task = tasks.get(taskId);
   const [title, setTitle] = useState(task?.title ?? "");
-  const [picker, setPicker] = useState<"plan" | "due" | "type" | "assignee" | null>(null);
-  const [newType, setNewType] = useState("");
+  const [picker, setPicker] = useState<PickerKind>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
+  const planRef = useRef<HTMLButtonElement>(null);
+  const dueRef = useRef<HTMLButtonElement>(null);
+  const typeRef = useRef<HTMLButtonElement>(null);
+  const assigneeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setTitle(task?.title ?? "");
@@ -44,6 +55,8 @@ export function TaskDetails({
   const today = todayISO();
   const planOverdue = task.scheduledOn !== null && !task.done && task.scheduledOn < today;
   const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < today;
+  const type = task.typeId !== null ? types.get(task.typeId) : undefined;
+  const assignee = task.assigneeId !== null ? people.get(task.assigneeId) : undefined;
 
   const saveTitle = () => {
     const v = title.trim();
@@ -52,9 +65,10 @@ export function TaskDetails({
   };
 
   const subtreeCount = subtreeIds(tasks, task.id).length;
+  const toggle = (kind: PickerKind) => setPicker((v) => (v === kind ? null : kind));
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-start gap-3">
         <Check
           done={task.done}
@@ -78,88 +92,95 @@ export function TaskDetails({
         </button>
       </div>
 
-      {project && (
+      {showCrumb && project && (
         <div className="flex items-center gap-2 min-w-0">
           <SDot color={project.color} />
           <span className="crumb">{crumb ? `${project.name} / ${crumb}` : project.name}</span>
         </div>
       )}
 
-      <div>
-        <MLabel className="pb-1.5">Сроки</MLabel>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={`chip ${picker === "plan" ? "chip-accent-border" : task.scheduledOn ? (planOverdue ? "date-chip-over" : "chip-accent") : ""}`}
-            onClick={() => setPicker((v) => (v === "plan" ? null : "plan"))}
-            title="План работы"
-          >
-            {task.scheduledOn
-              ? `${fmtDayChip(task.scheduledOn)}${task.endOn ? ` → ${fmtDayChip(task.endOn)}` : ""}`
-              : "＋ план"}
-          </button>
-          <button
-            type="button"
-            className={`chip ${picker === "due" ? "chip-accent-border" : task.dueOn ? (dueOverdue ? "date-chip-over" : "") : ""}`}
-            onClick={() => setPicker((v) => (v === "due" ? null : "due"))}
-            title="Дедлайн"
-          >
-            {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "＋ дедлайн"}
-          </button>
-        </div>
-        {picker === "plan" && (
-          <div className="pt-3">
-            <DatePicker
-              value={task.scheduledOn}
-              endValue={task.endOn}
-              title="План"
-              onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
-              onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
-              onClose={() => setPicker(null)}
-            />
-          </div>
-        )}
-        {picker === "due" && (
-          <div className="pt-3">
-            <DatePicker
-              value={task.dueOn}
-              title="Дедлайн"
-              onPick={(iso) => void patch(task.id, { dueOn: iso })}
-              onClose={() => setPicker(null)}
-            />
-          </div>
-        )}
+      {/* одна линия чипов: план · дедлайн · тип · исполнитель */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          ref={planRef}
+          type="button"
+          className={`chip ${picker === "plan" ? "chip-accent-border" : task.scheduledOn ? (planOverdue ? "date-chip-over" : "chip-accent") : ""}`}
+          onClick={() => toggle("plan")}
+          title="План работы"
+        >
+          {task.scheduledOn
+            ? `${fmtDayChip(task.scheduledOn)}${task.endOn ? ` → ${fmtDayChip(task.endOn)}` : ""}`
+            : "＋ план"}
+        </button>
+        <button
+          ref={dueRef}
+          type="button"
+          className={`chip ${picker === "due" ? "chip-accent-border" : task.dueOn ? (dueOverdue ? "date-chip-over" : "") : ""}`}
+          onClick={() => toggle("due")}
+          title="Дедлайн"
+        >
+          {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "⚑"}
+        </button>
+        <button
+          ref={typeRef}
+          type="button"
+          className={`chip ${picker === "type" ? "chip-accent-border" : ""} flex items-center gap-1.5`}
+          onClick={() => toggle("type")}
+          title="Тип задачи"
+        >
+          {type ? (
+            <>
+              <TypeBadge type={type} />
+              <span className="text-[12px]">{type.name}</span>
+            </>
+          ) : (
+            "тип"
+          )}
+        </button>
+        <button
+          ref={assigneeRef}
+          type="button"
+          className={`chip ${picker === "assignee" ? "chip-accent-border" : ""} flex items-center gap-1.5`}
+          onClick={() => toggle("assignee")}
+          title="Исполнитель (пусто — делаю я)"
+        >
+          {assignee ? (
+            <>
+              <AvatarDot name={assignee.name} color={assignee.color} size={15} />
+              <span className="text-[12px]">{assignee.name}</span>
+            </>
+          ) : (
+            "я"
+          )}
+        </button>
       </div>
 
-      <div>
-        <MLabel className="pb-1.5">Тип и исполнитель</MLabel>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={`chip ${picker === "type" ? "chip-accent-border" : task.typeId !== null ? "chip-accent" : ""}`}
-            onClick={() => setPicker((v) => (v === "type" ? null : "type"))}
-            title="Тип задачи"
-          >
-            {task.typeId !== null ? (types.get(task.typeId)?.name ?? "тип") : "＋ тип"}
-          </button>
-          <button
-            type="button"
-            className={`chip ${picker === "assignee" ? "chip-accent-border" : ""} flex items-center gap-1.5`}
-            onClick={() => setPicker((v) => (v === "assignee" ? null : "assignee"))}
-            title="Исполнитель (пусто — делаю я)"
-          >
-            {task.assigneeId !== null && people.get(task.assigneeId) ? (
-              <>
-                <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={15} />
-                {people.get(task.assigneeId)!.name}
-              </>
-            ) : (
-              "я"
-            )}
-          </button>
-        </div>
-        {picker === "type" && (
-          <div className="pt-2 flex flex-col gap-1">
+      {picker === "plan" && (
+        <AnchoredPopover anchorRef={planRef} onClose={() => setPicker(null)}>
+          <DatePicker
+            value={task.scheduledOn}
+            endValue={task.endOn}
+            title="План"
+            allowRange
+            onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
+            onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
+            onClose={() => setPicker(null)}
+          />
+        </AnchoredPopover>
+      )}
+      {picker === "due" && (
+        <AnchoredPopover anchorRef={dueRef} onClose={() => setPicker(null)}>
+          <DatePicker
+            value={task.dueOn}
+            title="Дедлайн"
+            onPick={(iso) => void patch(task.id, { dueOn: iso })}
+            onClose={() => setPicker(null)}
+          />
+        </AnchoredPopover>
+      )}
+      {picker === "type" && (
+        <AnchoredPopover anchorRef={typeRef} onClose={() => setPicker(null)}>
+          <div className="flex flex-col gap-0.5 min-w-[180px]">
             {[...types.values()]
               .sort((a, b) => a.position - b.position || a.id - b.id)
               .map((t) => (
@@ -172,29 +193,14 @@ export function TaskDetails({
                     setPicker(null);
                   }}
                 >
-                  <span>{t.name}</span>
+                  <span className="flex items-center gap-2">
+                    <TypeBadge type={t} />
+                    {t.name}
+                  </span>
                   {task.typeId === t.id && <span className="mmeta">✓</span>}
                 </button>
               ))}
-            <input
-              className="ghost-input text-[13px] px-2.5 py-1.5"
-              name="new-type"
-              aria-label="Новый тип"
-              placeholder="＋ новый тип…"
-              value={newType}
-              onChange={(e) => setNewType(e.target.value)}
-              onKeyDown={async (e) => {
-                if (e.key === "Enter" && newType.trim()) {
-                  const t = await createType(newType.trim());
-                  if (t) {
-                    void patch(task.id, { typeId: t.id });
-                    setNewType("");
-                    setPicker(null);
-                  }
-                }
-                if (e.key === "Escape") setNewType("");
-              }}
-            />
+            {types.size === 0 && <p className="text-[12px] text-dim px-2.5 py-1 m-0">Создай типы в разделе «Типы».</p>}
             {task.typeId !== null && (
               <button
                 type="button"
@@ -208,9 +214,11 @@ export function TaskDetails({
               </button>
             )}
           </div>
-        )}
-        {picker === "assignee" && (
-          <div className="pt-2 flex flex-col gap-1">
+        </AnchoredPopover>
+      )}
+      {picker === "assignee" && (
+        <AnchoredPopover anchorRef={assigneeRef} onClose={() => setPicker(null)}>
+          <div className="flex flex-col gap-0.5 min-w-[190px]">
             <button
               type="button"
               className="pop-item"
@@ -241,13 +249,13 @@ export function TaskDetails({
                   {task.assigneeId === p.id && <span className="mmeta">✓</span>}
                 </button>
               ))}
-            {people.size === 0 && <p className="text-[12px] text-dim px-2.5 m-0">Добавь людей в разделе «Команда».</p>}
+            {people.size === 0 && <p className="text-[12px] text-dim px-2.5 py-1 m-0">Добавь людей в «Команде».</p>}
           </div>
-        )}
-      </div>
+        </AnchoredPopover>
+      )}
 
       <div>
-        <MLabel className="pb-1.5">Описание</MLabel>
+        <MLabel className="pb-1">Описание</MLabel>
         <textarea
           key={task.id}
           ref={descRef}
@@ -292,7 +300,15 @@ export function TaskDetails({
 }
 
 // Модальная обёртка (идиома sheet из space, десктоп-вариант).
-export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => void }) {
+export function TaskModal({
+  taskId,
+  showCrumb = false,
+  onClose,
+}: {
+  taskId: number;
+  showCrumb?: boolean;
+  onClose: () => void;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -305,7 +321,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
     <>
       <div className="sheet-overlay" onClick={onClose} />
       <div className="sheet" role="dialog" aria-modal="true">
-        <TaskDetails taskId={taskId} variant="modal" onClose={onClose} />
+        <TaskDetails taskId={taskId} variant="modal" showCrumb={showCrumb} onClose={onClose} />
       </div>
     </>
   );

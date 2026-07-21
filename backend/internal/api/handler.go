@@ -193,25 +193,26 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		out := make([]map[string]any, len(types))
 		for i, t := range types {
-			out[i] = map[string]any{"id": t.ID, "name": t.Name, "position": t.Position}
+			out[i] = typeJSON(t)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"types": out})
 	})
 
 	mux.HandleFunc("POST /api/types", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
-			Name string `json:"name"`
+			Name  string `json:"name"`
+			Emoji string `json:"emoji"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		t, err := store.CreateType(db, b.Name)
+		t, err := store.CreateType(db, b.Name, b.Emoji)
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"type": map[string]any{"id": t.ID, "name": t.Name, "position": t.Position}})
+		writeJSON(w, http.StatusCreated, map[string]any{"type": typeJSON(t)})
 	})
 
 	mux.HandleFunc("PATCH /api/types/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -220,18 +221,19 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		var b struct {
-			Name string `json:"name"`
+			Name  Opt[string] `json:"name"`
+			Emoji Opt[string] `json:"emoji"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		t, err := store.UpdateType(db, id, b.Name)
+		t, err := store.UpdateType(db, id, store.TypeUpdate{Name: b.Name.Val, Emoji: b.Emoji.Val})
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"type": map[string]any{"id": t.ID, "name": t.Name, "position": t.Position}})
+		writeJSON(w, http.StatusOK, map[string]any{"type": typeJSON(t)})
 	})
 
 	mux.HandleFunc("DELETE /api/types/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +258,7 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		out := make([]map[string]any, len(people))
 		for i, p := range people {
-			out[i] = map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "position": p.Position}
+			out[i] = personJSON(p)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"people": out})
 	})
@@ -275,7 +277,7 @@ func Handler(db *sql.DB) http.Handler {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"person": map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "position": p.Position}})
+		writeJSON(w, http.StatusCreated, map[string]any{"person": personJSON(p)})
 	})
 
 	mux.HandleFunc("PATCH /api/people/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -284,19 +286,24 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		var b struct {
-			Name  Opt[string] `json:"name"`
-			Color Opt[string] `json:"color"`
+			Name   Opt[string] `json:"name"`
+			Color  Opt[string] `json:"color"`
+			RoleID Opt[int64]  `json:"roleId"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		p, err := store.UpdatePerson(db, id, store.PersonUpdate{Name: b.Name.Val, Color: b.Color.Val})
+		upd := store.PersonUpdate{Name: b.Name.Val, Color: b.Color.Val}
+		if b.RoleID.Set {
+			upd.SetRoleID, upd.RoleID = true, b.RoleID.Val
+		}
+		p, err := store.UpdatePerson(db, id, upd)
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"person": map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "position": p.Position}})
+		writeJSON(w, http.StatusOK, map[string]any{"person": personJSON(p)})
 	})
 
 	mux.HandleFunc("DELETE /api/people/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -305,6 +312,103 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		if err := store.DeletePerson(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
+	// ── роли ──
+
+	mux.HandleFunc("GET /api/roles", func(w http.ResponseWriter, r *http.Request) {
+		roles, err := store.ListRoles(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		out := make([]map[string]any, len(roles))
+		for i, rl := range roles {
+			out[i] = map[string]any{"id": rl.ID, "name": rl.Name, "position": rl.Position}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"roles": out})
+	})
+
+	mux.HandleFunc("POST /api/roles", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		rl, err := store.CreateRole(db, b.Name)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"role": map[string]any{"id": rl.ID, "name": rl.Name, "position": rl.Position}})
+	})
+
+	mux.HandleFunc("PATCH /api/roles/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		rl, err := store.UpdateRole(db, id, b.Name)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"role": map[string]any{"id": rl.ID, "name": rl.Name, "position": rl.Position}})
+	})
+
+	mux.HandleFunc("DELETE /api/roles/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteRole(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
+	// ── участники проектов ──
+
+	mux.HandleFunc("GET /api/members", func(w http.ResponseWriter, r *http.Request) {
+		members, err := store.ListMembers(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		out := make([]map[string]any, len(members))
+		for i, m := range members {
+			out[i] = map[string]any{"projectId": m.ProjectID, "personId": m.PersonID}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"members": out})
+	})
+
+	mux.HandleFunc("PUT /api/projects/{id}/members", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b struct {
+			PersonIDs []int64 `json:"personIds"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		if err := store.SetProjectMembers(db, id, b.PersonIDs); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -401,6 +505,14 @@ func Handler(db *sql.DB) http.Handler {
 	})
 
 	return mux
+}
+
+func typeJSON(t store.TaskType) map[string]any {
+	return map[string]any{"id": t.ID, "name": t.Name, "emoji": t.Emoji, "position": t.Position}
+}
+
+func personJSON(p store.Person) map[string]any {
+	return map[string]any{"id": p.ID, "name": p.Name, "color": p.Color, "roleId": p.RoleID, "position": p.Position}
 }
 
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {

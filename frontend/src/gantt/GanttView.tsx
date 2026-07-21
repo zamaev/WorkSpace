@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { MLabel, SBar } from "../components/ui";
 import { TaskModal } from "../components/TaskDetails";
+import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
 import { childProjects, childrenOf, projectUndone, rootTasks } from "../data/selectors";
 import type { Project, Task } from "../data/types";
@@ -373,6 +374,7 @@ function ProjectRows({
   onSetDates: () => void;
   onOpenTask: (id: number) => void;
 }) {
+  const { types } = useData();
   const { start, end } = applyDrag(project.startOn, project.dueOn, drag, "project", project.id);
 
   const flat: { task: Task; depth: number }[] = [];
@@ -427,6 +429,9 @@ function ProjectRows({
               >
                 {task.title}
               </button>
+              {task.typeId !== null && types.get(task.typeId) && (
+                <TypeBadge type={types.get(task.typeId)!} size={12} />
+              )}
             </div>
             <div className="g-track" style={{ width: totalW }}>
               <div className="g-wknd" style={{ backgroundImage: weekendBg }} />

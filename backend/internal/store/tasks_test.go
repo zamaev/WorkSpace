@@ -602,11 +602,11 @@ func TestEndOn(t *testing.T) {
 func TestTypesAndPeople(t *testing.T) {
 	e := openTest(t)
 
-	tp, err := CreateType(e.db, "Разработка")
+	tp, err := CreateType(e.db, "Разработка", "💻")
 	if err != nil || tp.Position != 0 {
 		t.Fatalf("создание типа: %v %+v", err, tp)
 	}
-	if _, err := CreateType(e.db, "  "); !errors.Is(err, ErrValidation) {
+	if _, err := CreateType(e.db, "  ", ""); !errors.Is(err, ErrValidation) {
 		t.Errorf("пустой тип: %v", err)
 	}
 	p, err := CreatePerson(e.db, "Айдрус", "#8fb56b")
@@ -660,12 +660,84 @@ func TestTypesAndPeople(t *testing.T) {
 	}
 
 	// rename
-	tp2, _ := CreateType(e.db, "QA")
-	if _, err := UpdateType(e.db, tp2.ID, "Тестирование"); err != nil {
+	tp2, _ := CreateType(e.db, "QA", "")
+	if _, err := UpdateType(e.db, tp2.ID, TypeUpdate{Name: new("Тестирование")}); err != nil {
 		t.Fatal(err)
 	}
 	types, _ := ListTypes(e.db)
 	if len(types) != 1 || types[0].Name != "Тестирование" {
 		t.Errorf("типы: %+v", types)
+	}
+}
+
+func TestRolesAndMembers(t *testing.T) {
+	e := openTest(t)
+
+	// роли: create/rename/назначение человеку/удаление снимает
+	role, err := CreateRole(e.db, "Backend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := CreatePerson(e.db, "Пётр", "#8fb56b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdatePerson(e.db, p.ID, PersonUpdate{SetRoleID: true, RoleID: &role.ID}); err != nil {
+		t.Fatal(err)
+	}
+	people, _ := ListPeople(e.db)
+	if people[0].RoleID == nil || *people[0].RoleID != role.ID {
+		t.Errorf("роль не назначилась: %+v", people[0])
+	}
+	if _, err := UpdateRole(e.db, role.ID, "Бэкенд"); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteRole(e.db, role.ID); err != nil {
+		t.Fatal(err)
+	}
+	people, _ = ListPeople(e.db)
+	if people[0].RoleID != nil {
+		t.Errorf("роль не снялась после удаления")
+	}
+
+	// участники проекта: replace, чистка при удалении человека
+	p2, _ := CreatePerson(e.db, "Мария", "#6a9bc9")
+	if err := SetProjectMembers(e.db, e.pid, []int64{p.ID, p2.ID}); err != nil {
+		t.Fatal(err)
+	}
+	ms, _ := ListMembers(e.db)
+	if len(ms) != 2 {
+		t.Fatalf("участники: %+v", ms)
+	}
+	if err := SetProjectMembers(e.db, e.pid, []int64{p2.ID}); err != nil {
+		t.Fatal(err)
+	}
+	ms, _ = ListMembers(e.db)
+	if len(ms) != 1 || ms[0].PersonID != p2.ID {
+		t.Errorf("replace не сработал: %+v", ms)
+	}
+	if err := DeletePerson(e.db, p2.ID); err != nil {
+		t.Fatal(err)
+	}
+	ms, _ = ListMembers(e.db)
+	if len(ms) != 0 {
+		t.Errorf("членство не почистилось: %+v", ms)
+	}
+	// несуществующий человек в составе — ошибка
+	if err := SetProjectMembers(e.db, e.pid, []int64{999}); !errors.Is(err, ErrBadPerson) {
+		t.Errorf("плохой участник: %v", err)
+	}
+
+	// emoji типа
+	tp, err := CreateType(e.db, "Встреча", "🤝")
+	if err != nil || tp.Emoji != "🤝" {
+		t.Fatalf("emoji при создании: %v %+v", err, tp)
+	}
+	if _, err := UpdateType(e.db, tp.ID, TypeUpdate{Emoji: new("📞")}); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := ListTypes(e.db)
+	if types[0].Emoji != "📞" {
+		t.Errorf("emoji не обновился: %+v", types[0])
 	}
 }
