@@ -159,6 +159,24 @@
     line-height: 1;
   }
 
+  /* строка списка внутри панели: разделители, выравнивание */
+  .prow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 2px;
+    min-height: 44px;
+    border-bottom: 1px solid var(--line);
+  }
+  .prow:last-child {
+    border-bottom: none;
+  }
+  .prow-tight {
+    gap: 10px;
+    padding: 8px 0;
+    min-height: 0;
+  }
+
   .chip {
     display: inline-flex;
     align-items: center;

@@ -24,7 +24,8 @@ function readWidth(key: string, def: number, min: number, max: number): number {
 }
 
 // Ручка изменения ширины колонки: pointer-drag, ширина через колбэк.
-function ColResize({ onDelta, onDone }: { onDelta: (dx: number) => void; onDone: () => void }) {
+// Сохранение делает сам onDelta: pointerup замыкал бы значение старого рендера.
+function ColResize({ onDelta }: { onDelta: (dx: number) => void }) {
   const [active, setActive] = useState(false);
   return (
     <div
@@ -40,7 +41,6 @@ function ColResize({ onDelta, onDone }: { onDelta: (dx: number) => void; onDone:
         const onUp = () => {
           window.removeEventListener("pointermove", onMove);
           setActive(false);
-          onDone();
         };
         window.addEventListener("pointermove", onMove);
         window.addEventListener("pointerup", onUp, { once: true });
@@ -126,8 +126,13 @@ export function ProjectsView() {
         <Sidebar currentId={current?.id ?? null} />
       </div>
       <ColResize
-        onDelta={(dx) => setSideW((w) => Math.min(400, Math.max(180, w + dx)))}
-        onDone={() => saveWidth(SIDE_W_KEY, sideW)}
+        onDelta={(dx) =>
+          setSideW((w) => {
+            const nw = Math.min(400, Math.max(180, w + dx));
+            saveWidth(SIDE_W_KEY, nw);
+            return nw;
+          })
+        }
       />
       {current ? (
         <TreeView key={current.id} project={current} selectedId={effectiveSelected} onSelect={setSelected} />
@@ -139,7 +144,17 @@ export function ProjectsView() {
           </p>
         </div>
       )}
-      {current && <ColResize onDelta={(dx) => setInspW((w) => Math.min(440, Math.max(240, w - dx)))} onDone={() => saveWidth(INSP_W_KEY, inspW)} />}
+      {current && (
+        <ColResize
+          onDelta={(dx) =>
+            setInspW((w) => {
+              const nw = Math.min(440, Math.max(240, w - dx));
+              saveWidth(INSP_W_KEY, nw);
+              return nw;
+            })
+          }
+        />
+      )}
       {current && (
         <aside className="inspector panel px-4 py-4" style={{ width: inspW }}>
           {effectiveSelected !== null ? (
