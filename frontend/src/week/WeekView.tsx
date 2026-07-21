@@ -2,11 +2,28 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MLabel, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { breadcrumb, overdue, sortedProjects } from "../data/selectors";
+import { breadcrumb, overdue, overdueDeadline, sortedProjects } from "../data/selectors";
 import { LAST_PROJECT_KEY } from "../tree/ProjectsView";
 import { addDays, fmtDayChip, fmtWeekRange, mondayOf, todayISO, weekDays } from "../lib/dates";
 import { plural } from "../lib/plural";
+import type { Task } from "../data/types";
+import type { ReactNode } from "react";
 import { DayColumn } from "./DayColumn";
+
+// Строка плашки просрочки; действия приходят снаружи (у дедлайнов и плана они разные).
+function OverdueRow({ task, dateIso, children }: { task: Task; dateIso: string; children: ReactNode }) {
+  const { tasks, projects } = useData();
+  const crumb = breadcrumb(tasks, task.id);
+  return (
+    <div className="flex items-center gap-3 py-1.5 border-b border-line last:border-b-0">
+      <SDot color={projects.get(task.projectId)?.color ?? "var(--check)"} />
+      <span className="mmeta !text-over whitespace-nowrap">{fmtDayChip(dateIso)}</span>
+      <span className="text-[13px] flex-1 min-w-0 truncate">{task.title}</span>
+      {crumb && <span className="crumb max-w-[220px]">{crumb}</span>}
+      {children}
+    </div>
+  );
+}
 
 const OVERDUE_KEY = "workspace-overdue-collapsed";
 const QUICK_PROJECT_KEY = "workspace-quick-project";
@@ -82,6 +99,7 @@ export function WeekView() {
   }
 
   const late = overdue(tasks, today);
+  const lateDue = overdueDeadline(tasks, today);
   const days = weekDays(monday);
   const empty = days.every((d) => ![...tasks.values()].some((t) => t.scheduledOn === d));
 
@@ -113,33 +131,38 @@ export function WeekView() {
         </div>
       </div>
 
-      {currentWeek && late.length > 0 && (
+      {currentWeek && late.length + lateDue.length > 0 && (
         <div className="panel px-4 py-3 mb-4 border-over/40">
           <button type="button" className="flex w-full items-center justify-between" onClick={toggleOverdue}>
             <MLabel className="!opacity-100 !text-over">
-              Просрочено · {plural(late.length, ["задача", "задачи", "задач"])}
+              Просрочено · {plural(late.length + lateDue.length, ["задача", "задачи", "задач"])}
             </MLabel>
             <span className="mmeta">{overdueCollapsed ? "развернуть" : "свернуть"}</span>
           </button>
           {!overdueCollapsed && (
             <div className="pt-2">
-              {late.map((t) => {
-                const crumb = breadcrumb(tasks, t.id);
-                return (
-                  <div key={t.id} className="flex items-center gap-3 py-1.5 border-b border-line last:border-b-0">
-                    <SDot color={projects.get(t.projectId)?.color ?? "var(--check)"} />
-                    <span className="mmeta !text-over whitespace-nowrap">{fmtDayChip(t.scheduledOn!)}</span>
-                    <span className="text-[13px] flex-1 min-w-0 truncate">{t.title}</span>
-                    {crumb && <span className="crumb max-w-[220px]">{crumb}</span>}
-                    <button type="button" className="seg" onClick={() => void patch(t.id, { scheduledOn: today })}>
-                      на сегодня
-                    </button>
-                    <button type="button" className="seg" onClick={() => void patch(t.id, { scheduledOn: null })}>
-                      снять дату
-                    </button>
-                  </div>
-                );
-              })}
+              {lateDue.length > 0 && <MLabel className="!text-over pt-1">Сорван дедлайн</MLabel>}
+              {lateDue.map((t) => (
+                <OverdueRow key={t.id} task={t} dateIso={t.dueOn!}>
+                  <button type="button" className="seg" onClick={() => void patch(t.id, { dueOn: today })}>
+                    дедлайн: сегодня
+                  </button>
+                  <button type="button" className="seg" onClick={() => void patch(t.id, { dueOn: null })}>
+                    снять дедлайн
+                  </button>
+                </OverdueRow>
+              ))}
+              {late.length > 0 && <MLabel className="pt-2">Не сделано в запланированный день</MLabel>}
+              {late.map((t) => (
+                <OverdueRow key={t.id} task={t} dateIso={t.scheduledOn!}>
+                  <button type="button" className="seg" onClick={() => void patch(t.id, { scheduledOn: today })}>
+                    на сегодня
+                  </button>
+                  <button type="button" className="seg" onClick={() => void patch(t.id, { scheduledOn: null })}>
+                    снять дату
+                  </button>
+                </OverdueRow>
+              ))}
             </div>
           )}
         </div>

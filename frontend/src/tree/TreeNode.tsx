@@ -29,6 +29,7 @@ export function TreeNode({
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dateMenu, setDateMenu] = useState(false);
+  const [dueMenu, setDueMenu] = useState(false);
   const [detail, setDetail] = useState(false);
   const [zone, setZone] = useState<DropZone>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -38,6 +39,7 @@ export function TreeNode({
   const open = isOpen(task.id);
   const today = todayISO();
   const chipOverdue = task.scheduledOn !== null && !task.done && task.scheduledOn < today;
+  const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < today;
 
   useEffect(() => {
     if (flashId === task.id) {
@@ -163,10 +165,35 @@ export function TreeNode({
             />
           )}
         </div>
+        <div className="relative">
+          {task.dueOn ? (
+            <button
+              type="button"
+              className={`chip ${dueOverdue ? "date-chip-over" : ""}`}
+              onClick={() => setDueMenu((v) => !v)}
+              title={dueOverdue ? "Дедлайн сорван" : "Изменить дедлайн"}
+            >
+              ⚑ {fmtDayChip(task.dueOn)}
+            </button>
+          ) : null}
+          {dueMenu && (
+            <DateMenu
+              current={task.dueOn}
+              title="Дедлайн"
+              onPick={(iso) => void patch(task.id, { dueOn: iso })}
+              onClose={() => setDueMenu(false)}
+            />
+          )}
+        </div>
         <div className="row-actions">
           {!task.scheduledOn && (
             <button type="button" className="row-btn" title="Назначить дату" onClick={() => setDateMenu((v) => !v)}>
               ◷
+            </button>
+          )}
+          {!task.dueOn && (
+            <button type="button" className="row-btn" title="Назначить дедлайн" onClick={() => setDueMenu((v) => !v)}>
+              ⚑
             </button>
           )}
           <button
