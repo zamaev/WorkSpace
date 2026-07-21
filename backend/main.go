@@ -13,6 +13,7 @@ import (
 
 	"workspace/internal/api"
 	"workspace/internal/store"
+	"workspace/web"
 )
 
 func main() {
@@ -35,9 +36,13 @@ func main() {
 	}
 	defer db.Close()
 
+	mux := http.NewServeMux()
+	mux.Handle("/api/", api.Handler(db))
+	mux.Handle("/", web.Handler())
+
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      api.Handler(db),
+		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
