@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useData } from "../data/DataProvider";
 import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { plural } from "../lib/plural";
-import { Check, MLabel, SDot } from "./ui";
+import { Check, MLabel, SDot, TrashIcon } from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
-import { DateMenu } from "./DateMenu";
+import { DatePicker } from "./DatePicker";
 
 // Детали задачи: панель-инспектор в «Проектах» и модал в «Неделе»/«Ганте».
 export function TaskDetails({
@@ -21,14 +21,21 @@ export function TaskDetails({
   const { tasks, projects, patch, remove } = useData();
   const task = tasks.get(taskId);
   const [title, setTitle] = useState(task?.title ?? "");
-  const [planMenu, setPlanMenu] = useState(false);
-  const [dueMenu, setDueMenu] = useState(false);
+  const [picker, setPicker] = useState<"plan" | "due" | null>(null);
+  const descRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setTitle(task?.title ?? "");
-    setPlanMenu(false);
-    setDueMenu(false);
+    setPicker(null);
   }, [taskId, task?.title]);
+
+  // автовысота описания: поле растёт под содержимое, без скролла
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [taskId, task?.description]);
 
   if (!task) return null;
   const project = projects.get(task.projectId);
@@ -80,57 +87,65 @@ export function TaskDetails({
       <div>
         <MLabel className="pb-1.5">Сроки</MLabel>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <button
-              type="button"
-              className={`chip ${task.scheduledOn ? (planOverdue ? "date-chip-over" : "chip-accent") : ""}`}
-              onClick={() => setPlanMenu((v) => !v)}
-              title="План работы"
-            >
-              {task.scheduledOn
-                ? `${fmtDayChip(task.scheduledOn)}${task.endOn ? ` → ${fmtDayChip(task.endOn)}` : ""}`
-                : "＋ план"}
-            </button>
-            {planMenu && (
-              <DateMenu
-                current={task.scheduledOn}
-                endCurrent={task.endOn}
-                onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
-                onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
-                onClose={() => setPlanMenu(false)}
-              />
-            )}
-          </div>
-          <div className="relative">
-            <button
-              type="button"
-              className={`chip ${task.dueOn ? (dueOverdue ? "date-chip-over" : "") : ""}`}
-              onClick={() => setDueMenu((v) => !v)}
-              title="Дедлайн"
-            >
-              {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "＋ дедлайн"}
-            </button>
-            {dueMenu && (
-              <DateMenu
-                current={task.dueOn}
-                title="Дедлайн"
-                onPick={(iso) => void patch(task.id, { dueOn: iso })}
-                onClose={() => setDueMenu(false)}
-              />
-            )}
-          </div>
+          <button
+            type="button"
+            className={`chip ${picker === "plan" ? "chip-accent-border" : task.scheduledOn ? (planOverdue ? "date-chip-over" : "chip-accent") : ""}`}
+            onClick={() => setPicker((v) => (v === "plan" ? null : "plan"))}
+            title="План работы"
+          >
+            {task.scheduledOn
+              ? `${fmtDayChip(task.scheduledOn)}${task.endOn ? ` → ${fmtDayChip(task.endOn)}` : ""}`
+              : "＋ план"}
+          </button>
+          <button
+            type="button"
+            className={`chip ${picker === "due" ? "chip-accent-border" : task.dueOn ? (dueOverdue ? "date-chip-over" : "") : ""}`}
+            onClick={() => setPicker((v) => (v === "due" ? null : "due"))}
+            title="Дедлайн"
+          >
+            {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "＋ дедлайн"}
+          </button>
         </div>
+        {picker === "plan" && (
+          <div className="pt-3">
+            <DatePicker
+              value={task.scheduledOn}
+              endValue={task.endOn}
+              title="План"
+              onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
+              onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
+              onClose={() => setPicker(null)}
+            />
+          </div>
+        )}
+        {picker === "due" && (
+          <div className="pt-3">
+            <DatePicker
+              value={task.dueOn}
+              title="Дедлайн"
+              onPick={(iso) => void patch(task.id, { dueOn: iso })}
+              onClose={() => setPicker(null)}
+            />
+          </div>
+        )}
       </div>
 
       <div>
         <MLabel className="pb-1.5">Описание</MLabel>
         <textarea
           key={task.id}
-          className="ghost-input border border-line rounded-[10px] px-3 py-2 text-[13px] min-h-[96px] resize-y w-full"
+          ref={descRef}
+          className="desc-input"
+          rows={2}
           name="task-description"
           aria-label="Описание задачи"
           placeholder="Описание…"
           defaultValue={task.description}
+          onInput={(e) => {
+            const el = e.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
           onBlur={(e) => {
             const v = e.target.value;
             if (v !== task.description) void patch(task.id, { description: v });
@@ -140,7 +155,7 @@ export function TaskDetails({
 
       <div className="flex items-center justify-between pt-1">
         <ConfirmButton
-          className="seg"
+          className="seg flex items-center gap-1.5"
           armedClassName="!text-over !border-over"
           confirmLabel={subtreeCount > 1 ? `удалить ${plural(subtreeCount, ["задачу", "задачи", "задач"])}?` : "точно удалить?"}
           onConfirm={() => {
@@ -148,7 +163,7 @@ export function TaskDetails({
             onClose();
           }}
         >
-          Удалить
+          <TrashIcon /> Удалить
         </ConfirmButton>
         {variant === "modal" && (
           <Link to={`/projects/${task.projectId}?focus=${task.id}`} className="mmeta !text-accent" onClick={onClose}>

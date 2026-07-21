@@ -42,3 +42,18 @@ export function Check({
     </button>
   );
 }
+
+// Штриховая корзина в духе языка (наследует currentColor).
+export function TrashIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M1.5 3.5h11M5.5 1.5h3M3 3.5l.7 8.2c.05.6.55 1.05 1.15 1.05h4.3c.6 0 1.1-.45 1.15-1.05l.7-8.2M5.6 6v4M8.4 6v4"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Check, SBar } from "../components/ui";
-import { DateMenu } from "../components/DateMenu";
+import { DatePickerPopover } from "../components/DatePicker";
 import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
 import type { Task } from "../data/types";
@@ -165,9 +165,10 @@ export function TreeNode({
             </button>
           ) : null}
           {dateMenu && (
-            <DateMenu
-              current={task.scheduledOn}
-              endCurrent={task.endOn}
+            <DatePickerPopover
+              value={task.scheduledOn}
+              endValue={task.endOn}
+              title="План"
               onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
               onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
               onClose={() => setDateMenu(false)}
@@ -189,8 +190,8 @@ export function TreeNode({
             </button>
           ) : null}
           {dueMenu && (
-            <DateMenu
-              current={task.dueOn}
+            <DatePickerPopover
+              value={task.dueOn}
               title="Дедлайн"
               onPick={(iso) => void patch(task.id, { dueOn: iso })}
               onClose={() => setDueMenu(false)}

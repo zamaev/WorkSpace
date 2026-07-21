@@ -398,6 +398,63 @@
     width: max-content;
   }
 
+  /* ── календарь ── */
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 30px);
+    gap: 2px;
+    justify-content: start;
+  }
+  .cal-dow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9px;
+    color: var(--dim);
+    opacity: 0.7;
+    text-align: center;
+    padding-bottom: 2px;
+  }
+  .cal-day {
+    height: 28px;
+    border-radius: 8px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cal-day:hover {
+    background: var(--asoft);
+  }
+  .cal-out {
+    opacity: 0.28;
+  }
+  .cal-today {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
+  .cal-sel {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .cal-range {
+    background: var(--asoft);
+  }
+
+  /* ручка изменения ширины колонок */
+  .col-resize {
+    flex: none;
+    width: 7px;
+    margin: 0 -1px;
+    cursor: col-resize;
+    border-radius: 4px;
+    align-self: stretch;
+  }
+  .col-resize:hover,
+  .col-resize-active {
+    background: var(--asoft);
+  }
+
   /* ── инспектор задачи ── */
 
   .inspector {
@@ -406,6 +463,22 @@
     position: sticky;
     top: 14px;
   }
+  .desc-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    width: 100%;
+    resize: none;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .desc-input::placeholder {
+    color: var(--dim);
+    opacity: 0.65;
+  }
+
   .tree-row-sel {
     background: var(--asoft);
   }
