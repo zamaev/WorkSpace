@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MLabel, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { breadcrumb, overdue, overdueDeadline, sortedProjects } from "../data/selectors";
+import { breadcrumb, flattenActiveProjects, isTaskVisible, overdue, overdueDeadline } from "../data/selectors";
 import { LAST_PROJECT_KEY } from "../tree/ProjectsView";
 import { addDays, fmtDayChip, fmtWeekRange, mondayOf, todayISO, weekDays } from "../lib/dates";
 import { plural } from "../lib/plural";
@@ -27,6 +27,7 @@ function OverdueRow({ task, dateIso, children }: { task: Task; dateIso: string; 
 
 const OVERDUE_KEY = "workspace-overdue-collapsed";
 const QUICK_PROJECT_KEY = "workspace-quick-project";
+const WEEKENDS_KEY = "workspace-hide-weekends";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function readStoredId(key: string): number | null {
@@ -48,10 +49,11 @@ export function WeekView() {
   const [quickProject, setQuickProject] = useState<number | null>(
     () => readStoredId(QUICK_PROJECT_KEY) ?? readStoredId(LAST_PROJECT_KEY),
   );
+  const activeFlat = flattenActiveProjects(projects);
   const effectiveQuick =
-    quickProject !== null && projects.has(quickProject)
+    quickProject !== null && projects.has(quickProject) && !projects.get(quickProject)!.archived
       ? quickProject
-      : (sortedProjects(projects)[0]?.id ?? null);
+      : (activeFlat[0]?.project.id ?? null);
   const pickQuickProject = (id: number) => {
     setQuickProject(id);
     try {
@@ -72,6 +74,23 @@ export function WeekView() {
       return false;
     }
   });
+  const [hideWeekends, setHideWeekends] = useState(() => {
+    try {
+      return localStorage.getItem(WEEKENDS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleWeekends = () => {
+    setHideWeekends((v) => {
+      try {
+        localStorage.setItem(WEEKENDS_KEY, v ? "0" : "1");
+      } catch {
+        // приватный режим — состояние не переживёт перезагрузку
+      }
+      return !v;
+    });
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -98,10 +117,13 @@ export function WeekView() {
     );
   }
 
-  const late = overdue(tasks, today);
-  const lateDue = overdueDeadline(tasks, today);
-  const days = weekDays(monday);
-  const empty = days.every((d) => ![...tasks.values()].some((t) => t.scheduledOn === d));
+  // задачи архивных проектов не показываем нигде в неделе
+  const late = overdue(tasks, today).filter((t) => isTaskVisible(projects, t));
+  const lateDue = overdueDeadline(tasks, today).filter((t) => isTaskVisible(projects, t));
+  const days = hideWeekends ? weekDays(monday).slice(0, 5) : weekDays(monday);
+  const empty = days.every(
+    (d) => ![...tasks.values()].some((t) => t.scheduledOn === d && isTaskVisible(projects, t)),
+  );
 
   const toggleOverdue = () => {
     setOverdueCollapsed((v) => {
@@ -119,6 +141,9 @@ export function WeekView() {
       <div className="flex items-center justify-between pb-4">
         <h1 className="text-[17px] font-semibold m-0">{fmtWeekRange(monday)}</h1>
         <div className="flex gap-2">
+          <button type="button" className={`seg ${hideWeekends ? "" : "seg-on"}`} onClick={toggleWeekends} title="Показывать выходные">
+            Сб–Вс
+          </button>
           <button type="button" className="icon-btn" onClick={() => navigate(`/week/${addDays(monday, -7)}`)} aria-label="Предыдущая неделя">
             ◂
           </button>

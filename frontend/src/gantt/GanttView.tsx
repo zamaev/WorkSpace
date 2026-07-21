@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { Link } from "react-router-dom";
 import { MLabel, SBar } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { childrenOf, projectUndone, rootTasks, sortedProjects } from "../data/selectors";
+import { childProjects, childrenOf, projectUndone, rootTasks } from "../data/selectors";
 import type { Project, Task } from "../data/types";
 import { addDays, todayISO } from "../lib/dates";
 import { DAY_W, NAME_W, buildScale, dayIndex, monthSegments, saturdayOffset, xOf, type Scale } from "./timeline";
 
 const OPEN_KEY = "workspace-gantt-open";
+const ARCHIVE_KEY = "workspace-gantt-archived";
 const PROJECT_ROW_H = 40;
 const TASK_ROW_H = 30;
 const HEAD_H = 44;
@@ -58,9 +59,36 @@ export function GanttView() {
   const today = todayISO();
   const [open, setOpen] = useState<Set<number>>(loadOpen);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [showArchived, setShowArchived] = useState(() => {
+    try {
+      return localStorage.getItem(ARCHIVE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const list = sortedProjects(projects);
+  const toggleArchived = () => {
+    setShowArchived((v) => {
+      try {
+        localStorage.setItem(ARCHIVE_KEY, v ? "0" : "1");
+      } catch {
+        // приватный режим — состояние не переживёт перезагрузку
+      }
+      return !v;
+    });
+  };
+
+  // проекты в порядке дерева с глубиной; архивные — только при включённом тумблере
+  const list: { project: Project; depth: number }[] = [];
+  const walkProjects = (parentId: number | null, depth: number) => {
+    for (const p of childProjects(projects, parentId)) {
+      if (p.archived && !showArchived) continue;
+      list.push({ project: p, depth });
+      walkProjects(p.id, depth + 1);
+    }
+  };
+  walkProjects(null, 0);
 
   const scale = useMemo(() => {
     const dates: string[] = [];
@@ -179,16 +207,21 @@ export function GanttView() {
     <div>
       <div className="flex items-center justify-between pb-4">
         <h1 className="text-[17px] font-semibold m-0">Гант</h1>
-        <button
-          type="button"
-          className="seg"
-          onClick={() => {
-            const el = scrollRef.current;
-            if (el) el.scrollTo({ left: Math.max(0, NAME_W + xOf(scale, today) - el.clientWidth / 3), behavior: "smooth" });
-          }}
-        >
-          Сегодня
-        </button>
+        <div className="flex gap-2">
+          <button type="button" className={`seg ${showArchived ? "seg-on" : ""}`} onClick={toggleArchived} title="Показывать архивные проекты">
+            Архив
+          </button>
+          <button
+            type="button"
+            className="seg"
+            onClick={() => {
+              const el = scrollRef.current;
+              if (el) el.scrollTo({ left: Math.max(0, NAME_W + xOf(scale, today) - el.clientWidth / 3), behavior: "smooth" });
+            }}
+          >
+            Сегодня
+          </button>
+        </div>
       </div>
 
       <div className="gantt-scroll" ref={scrollRef}>
@@ -199,20 +232,19 @@ export function GanttView() {
               <MLabel>Проекты</MLabel>
             </div>
             <div className="g-track" style={{ width: totalW }}>
-              <div className="whitespace-nowrap">
+              <div className="whitespace-nowrap flex">
                 {monthSegments(scale).map((m, i) => (
                   <span key={i} className="g-month" style={{ width: m.days * DAY_W }}>
-                    {m.label}
+                    <span className="g-month-label">{m.label}</span>
                   </span>
                 ))}
               </div>
               <div className="whitespace-nowrap">
                 {Array.from({ length: scale.days }, (_, i) => {
                   const iso = addDays(scale.start, i);
-                  const isMonday = new Date(iso + "T12:00").getDay() === 1;
                   return (
-                    <span key={i} className="g-day" style={{ width: DAY_W }}>
-                      {isMonday ? Number(iso.slice(8)) : ""}
+                    <span key={i} className={`g-day ${iso === today ? "g-day-today" : ""}`} style={{ width: DAY_W }}>
+                      {Number(iso.slice(8))}
                     </span>
                   );
                 })}
@@ -220,10 +252,11 @@ export function GanttView() {
             </div>
           </div>
 
-          {list.map((p) => (
+          {list.map(({ project: p, depth }) => (
             <ProjectRows
               key={p.id}
               project={p}
+              depth={depth}
               tasks={tasks}
               scale={scale}
               totalW={totalW}
@@ -232,7 +265,7 @@ export function GanttView() {
               toggleOpen={() => toggleOpen(p.id)}
               drag={drag}
               startDrag={startDrag}
-              undone={projectUndone(tasks, p.id)}
+              undone={projectUndone(tasks, projects, p.id)}
               onSetDates={() => void patchProject(p.id, { startOn: today, dueOn: addDays(today, 13) })}
             />
           ))}
@@ -249,22 +282,30 @@ export function GanttView() {
   );
 }
 
-// повторяющийся градиент подсветки выходных: период 7 дней от начала шкалы
+// повторяющийся градиент подсветки выходных + тонкий пунктир границ дней
 function weekendGradient(satOff: number): string {
   const c = "color-mix(in srgb, var(--text) 3%, transparent)";
   const d = DAY_W;
   const period = 7 * d;
+  // svg-паттерн: вертикальный пунктир на правой границе каждого дня;
+  // rgba-цвет читается в обеих темах
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${d}' height='8'><line x1='${d - 0.5}' y1='0' x2='${d - 0.5}' y2='4' stroke='rgba(138,143,152,0.30)' stroke-width='1'/></svg>`;
+  const grid = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  let weekend: string;
   if (satOff <= 5) {
     const a = satOff * d;
     const b = (satOff + 2) * d;
-    return `repeating-linear-gradient(90deg, transparent 0, transparent ${a}px, ${c} ${a}px, ${c} ${b}px, transparent ${b}px, transparent ${period}px)`;
+    weekend = `repeating-linear-gradient(90deg, transparent 0, transparent ${a}px, ${c} ${a}px, ${c} ${b}px, transparent ${b}px, transparent ${period}px)`;
+  } else {
+    // суббота — последний день периода, воскресенье переносится в начало
+    weekend = `repeating-linear-gradient(90deg, ${c} 0, ${c} ${d}px, transparent ${d}px, transparent ${6 * d}px, ${c} ${6 * d}px, ${c} ${period}px)`;
   }
-  // суббота — последний день периода, воскресенье переносится в начало
-  return `repeating-linear-gradient(90deg, ${c} 0, ${c} ${d}px, transparent ${d}px, transparent ${6 * d}px, ${c} ${6 * d}px, ${c} ${period}px)`;
+  return `${grid}, ${weekend}`;
 }
 
 function ProjectRows({
   project,
+  depth,
   tasks,
   scale,
   totalW,
@@ -277,6 +318,7 @@ function ProjectRows({
   onSetDates,
 }: {
   project: Project;
+  depth: number;
   tasks: Map<number, Task>;
   scale: Scale;
   totalW: number;
@@ -304,8 +346,8 @@ function ProjectRows({
 
   return (
     <>
-      <div className="g-row" style={{ height: PROJECT_ROW_H }}>
-        <div className="g-name" style={{ width: NAME_W }}>
+      <div className={`g-row ${project.archived ? "opacity-50" : ""}`} style={{ height: PROJECT_ROW_H }}>
+        <div className="g-name" style={{ width: NAME_W, paddingLeft: 10 + depth * 14 }}>
           <button type="button" className="chevron" onClick={toggleOpen} aria-label={open ? "Свернуть" : "Развернуть"}>
             <span className={open ? "inline-block rotate-90" : "inline-block"}>▶</span>
           </button>
@@ -329,11 +371,11 @@ function ProjectRows({
           />
         </div>
       </div>
-      {flat.map(({ task, depth }) => {
+      {flat.map(({ task, depth: taskDepth }) => {
         const td = applyDrag(task.scheduledOn, task.dueOn, drag, "task", task.id);
         return (
-          <div className="g-row" style={{ height: TASK_ROW_H }} key={task.id}>
-            <div className="g-name" style={{ width: NAME_W, paddingLeft: 34 + depth * 16 }}>
+          <div className={`g-row ${project.archived ? "opacity-50" : ""}`} style={{ height: TASK_ROW_H }} key={task.id}>
+            <div className="g-name" style={{ width: NAME_W, paddingLeft: 34 + (depth + taskDepth) * 14 }}>
               <Link
                 to={`/projects/${project.id}?focus=${task.id}`}
                 className={`flex-1 min-w-0 truncate text-[12.5px] ${task.done ? "text-dim line-through" : ""}`}
