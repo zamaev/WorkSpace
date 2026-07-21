@@ -158,7 +158,7 @@ REST, JSON, префикс `/api`. Однопользовательский ло
 
 - Токены обеих тем из `index.css` (bg/panel/line/text/dim/accent «приглушённое
   золото»/pos/over), радиусы (panel 18 / ctl 12 / box 7), шрифты Onest +
-  JetBrains Mono (самохостинг, как в space).
+  JetBrains Mono (Google Fonts CDN, как в space).
 - Идиомы: `.panel`, mono-caps метки (MLabel), чекбоксы (Check — хватает
   состояний off/done), прогресс/точки по необходимости.
 - Не переносим: цвета 15 сфер, арабская типографика/RTL, мобильные паттерны
