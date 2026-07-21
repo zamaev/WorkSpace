@@ -1,0 +1,7 @@
+data/
+node_modules/
+backend/web/dist/*
+!backend/web/dist/.gitkeep
+frontend/dist/
+*.log
+.DS_Store
