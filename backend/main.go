@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"workspace/internal/api"
 	"workspace/internal/store"
 )
 
@@ -34,15 +35,9 @@ func main() {
 	}
 	defer db.Close()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ok":true}`))
-	})
-
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      api.Handler(db),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
