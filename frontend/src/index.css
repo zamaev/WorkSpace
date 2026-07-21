@@ -530,10 +530,21 @@
     align-items: center;
     justify-content: center;
     font-family: "JetBrains Mono", monospace;
-    font-size: 9.5px;
+    font-size: 9px;
     color: var(--dim);
-    opacity: 0.75;
+    opacity: 0.6;
     height: 20px;
+  }
+  .g-day-today {
+    color: var(--accent);
+    opacity: 1;
+    font-weight: 600;
+  }
+  /* подпись месяца «плывёт» при горизонтальном скролле в пределах сегмента */
+  .g-month-label {
+    display: inline-block;
+    position: sticky;
+    left: 248px;
   }
   .g-today {
     position: absolute;

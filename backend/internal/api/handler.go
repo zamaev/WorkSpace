@@ -29,10 +29,12 @@ type taskJSON struct {
 
 type projectJSON struct {
 	ID        int64   `json:"id"`
+	ParentID  *int64  `json:"parentId"`
 	Name      string  `json:"name"`
 	Color     string  `json:"color"`
 	StartOn   *string `json:"startOn"`
 	DueOn     *string `json:"dueOn"`
+	Archived  bool    `json:"archived"`
 	Position  int     `json:"position"`
 	CreatedAt string  `json:"createdAt"`
 	UpdatedAt string  `json:"updatedAt"`
@@ -78,6 +80,7 @@ type patchBody struct {
 	ScheduledOn Opt[string] `json:"scheduledOn"`
 	DueOn       Opt[string] `json:"dueOn"`
 	ParentID    Opt[int64]  `json:"parentId"`
+	ProjectID   Opt[int64]  `json:"projectId"`
 	Position    Opt[int]    `json:"position"`
 	DayPosition Opt[int]    `json:"dayPosition"`
 }
@@ -86,6 +89,8 @@ type projectBody struct {
 	Name     Opt[string] `json:"name"`
 	Color    Opt[string] `json:"color"`
 	Position Opt[int]    `json:"position"`
+	ParentID Opt[int64]  `json:"parentId"`
+	Archived Opt[bool]   `json:"archived"`
 	StartOn  Opt[string] `json:"startOn"`
 	DueOn    Opt[string] `json:"dueOn"`
 }
@@ -121,7 +126,7 @@ func Handler(db *sql.DB) http.Handler {
 		if b.Color.Val != nil {
 			color = *b.Color.Val
 		}
-		p, err := store.CreateProject(db, name, color)
+		p, err := store.CreateProject(db, name, color, b.ParentID.Val)
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -139,7 +144,10 @@ func Handler(db *sql.DB) http.Handler {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		upd := store.ProjectUpdate{Name: b.Name.Val, Color: b.Color.Val, Position: b.Position.Val}
+		upd := store.ProjectUpdate{Name: b.Name.Val, Color: b.Color.Val, Position: b.Position.Val, Archived: b.Archived.Val}
+		if b.ParentID.Set {
+			upd.SetParentID, upd.ParentID = true, b.ParentID.Val
+		}
 		if b.StartOn.Set {
 			upd.SetStartOn, upd.StartOn = true, b.StartOn.Val
 		}
@@ -159,12 +167,11 @@ func Handler(db *sql.DB) http.Handler {
 		if !ok {
 			return
 		}
-		n, err := store.DeleteProject(db, id)
-		if err != nil {
+		if err := store.DeleteProject(db, id); err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
 
 	// ── задачи ──
@@ -222,6 +229,9 @@ func Handler(db *sql.DB) http.Handler {
 		if b.ParentID.Set {
 			req.SetParentID, req.ParentID = true, b.ParentID.Val
 		}
+		if b.ProjectID.Set {
+			req.SetProjectID, req.ProjectID = true, b.ProjectID.Val
+		}
 		tasks, err := store.UpdateTask(db, id, req)
 		if err != nil {
 			writeErr(w, err)
@@ -268,7 +278,8 @@ func writeErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 	case errors.Is(err, store.ErrValidation), errors.Is(err, store.ErrCycle),
-		errors.Is(err, store.ErrBadParent), errors.Is(err, store.ErrBadProject):
+		errors.Is(err, store.ErrBadParent), errors.Is(err, store.ErrBadProject),
+		errors.Is(err, store.ErrProjectNotEmpty), errors.Is(err, store.ErrArchivedTarget):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 	default:
 		slog.Error("внутренняя ошибка api", "err", err)

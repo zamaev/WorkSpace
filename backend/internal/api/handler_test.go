@@ -102,13 +102,36 @@ func TestProjectsOverHTTP(t *testing.T) {
 		t.Errorf("PATCH несуществующего: %d", code)
 	}
 
-	// удаление каскадом с задачами
-	call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "a", "projectId": pid})
-	code, res = call(t, "DELETE", fmt.Sprintf("%s/api/projects/%d", srv.URL, pid), nil)
-	var deleted int
-	json.Unmarshal(res["deleted"], &deleted)
-	if code != 200 || deleted != 1 {
-		t.Errorf("DELETE project: %d, задач удалено %d", code, deleted)
+	// удаление с задачами — 422; после удаления задач — ок
+	_, res = call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "a", "projectId": pid})
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(res["task"], &created)
+	if code, _ := call(t, "DELETE", fmt.Sprintf("%s/api/projects/%d", srv.URL, pid), nil); code != 422 {
+		t.Errorf("DELETE непустого: %d", code)
+	}
+	call(t, "DELETE", fmt.Sprintf("%s/api/tasks/%d", srv.URL, created.ID), nil)
+	if code, _ := call(t, "DELETE", fmt.Sprintf("%s/api/projects/%d", srv.URL, pid), nil); code != 200 {
+		t.Errorf("DELETE пустого: %d", code)
+	}
+
+	// вложенный проект + архивация рекурсивно
+	rootID := mkProject(t, srv, "Корень")
+	code, res = call(t, "POST", srv.URL+"/api/projects", map[string]any{"name": "Дитя", "color": "#8fb56b", "parentId": rootID})
+	if code != 201 {
+		t.Fatalf("вложенный проект: %d %s", code, res["error"])
+	}
+	code, res = call(t, "PATCH", fmt.Sprintf("%s/api/projects/%d", srv.URL, rootID), map[string]any{"archived": true})
+	if code != 200 {
+		t.Fatalf("архивация: %d %s", code, res["error"])
+	}
+	var archived []struct {
+		Archived bool `json:"archived"`
+	}
+	json.Unmarshal(res["projects"], &archived)
+	if len(archived) != 2 || !archived[0].Archived || !archived[1].Archived {
+		t.Errorf("рекурсивная архивация: %+v", archived)
 	}
 }
 
@@ -148,7 +171,7 @@ func TestCRUDOverHTTP(t *testing.T) {
 		t.Errorf("ребёнок: %+v", child)
 	}
 
-	// каскад через http: done ребёнка закрывает корень; в ответе оба
+	// v4: каскада нет — done ребёнка не трогает корень
 	code, res = call(t, "PATCH", fmt.Sprintf("%s/api/tasks/%d", srv.URL, child.ID), map[string]any{"done": true})
 	if code != 200 {
 		t.Fatalf("PATCH done: %d %s", code, res["error"])
@@ -158,37 +181,33 @@ func TestCRUDOverHTTP(t *testing.T) {
 		Done bool  `json:"done"`
 	}
 	json.Unmarshal(res["tasks"], &patched)
-	if len(patched) != 2 {
-		t.Fatalf("каскад в ответе: %+v", patched)
-	}
-	for _, p := range patched {
-		if !p.Done {
-			t.Errorf("не done в каскаде: %+v", p)
-		}
+	if len(patched) != 1 || patched[0].ID != child.ID {
+		t.Fatalf("в ответе должен быть только сам ребёнок: %+v", patched)
 	}
 
-	// создание нового ребёнка открывает предков; ответ содержит task+tasks
-	code, res = call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "ещё", "parentId": root.ID})
-	if code != 201 {
-		t.Fatalf("POST ещё: %d", code)
+	// перенос задачи в другой проект через projectId
+	pid2 := mkProject(t, srv, "Второй")
+	code, res = call(t, "PATCH", fmt.Sprintf("%s/api/tasks/%d", srv.URL, child.ID), map[string]any{"projectId": pid2})
+	if code != 200 {
+		t.Fatalf("перенос projectId: %d %s", code, res["error"])
 	}
-	var affected []struct {
-		ID   int64 `json:"id"`
-		Done bool  `json:"done"`
+	var moved []struct {
+		ID        int64  `json:"id"`
+		ProjectID int64  `json:"projectId"`
+		ParentID  *int64 `json:"parentId"`
 	}
-	json.Unmarshal(res["tasks"], &affected)
-	foundRoot := false
-	for _, a := range affected {
-		if a.ID == root.ID {
-			foundRoot = true
-			if a.Done {
-				t.Errorf("корень не открылся при создании")
-			}
+	json.Unmarshal(res["tasks"], &moved)
+	ok := false
+	for _, m := range moved {
+		if m.ID == child.ID && m.ProjectID == pid2 && m.ParentID == nil {
+			ok = true
 		}
 	}
-	if !foundRoot {
-		t.Errorf("корень не в затронутых: %+v", affected)
+	if !ok {
+		t.Errorf("перенос не сработал: %+v", moved)
 	}
+	// вернём обратно под корень для теста DELETE ниже
+	call(t, "PATCH", fmt.Sprintf("%s/api/tasks/%d", srv.URL, child.ID), map[string]any{"parentId": root.ID})
 
 	// PATCH: снять дату (null значим)
 	code, res = call(t, "PATCH", fmt.Sprintf("%s/api/tasks/%d", srv.URL, child.ID), map[string]any{"scheduledOn": nil})
@@ -200,7 +219,7 @@ func TestCRUDOverHTTP(t *testing.T) {
 	code, res = call(t, "DELETE", fmt.Sprintf("%s/api/tasks/%d", srv.URL, root.ID), nil)
 	var deleted int
 	json.Unmarshal(res["deleted"], &deleted)
-	if code != 200 || deleted != 3 {
+	if code != 200 || deleted != 2 {
 		t.Errorf("DELETE: %d, удалено %d", code, deleted)
 	}
 }

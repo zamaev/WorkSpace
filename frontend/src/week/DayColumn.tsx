@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { sortedProjects, tasksOn } from "../data/selectors";
+import { flattenActiveProjects, isTaskVisible, tasksOn } from "../data/selectors";
 import { fmtDayHeader, todayISO } from "../lib/dates";
 import { getDragTask, hasDragTask } from "../tree/dnd";
 import { TaskCard } from "./TaskCard";
@@ -23,7 +23,7 @@ export function DayColumn({
   const [picker, setPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const list = tasksOn(tasks, day);
+  const list = tasksOn(tasks, day).filter((t) => isTaskVisible(projects, t));
   const isToday = day === todayISO();
   const project = quickProject !== null ? projects.get(quickProject) : undefined;
 
@@ -134,7 +134,7 @@ export function DayColumn({
             {picker && (
               <div className="popover !left-0 !right-auto w-[200px]">
                 <div className="mlabel mb-1">В какой проект</div>
-                {sortedProjects(projects).map((p) => (
+                {flattenActiveProjects(projects).map(({ project: p, depth }) => (
                   <button
                     key={p.id}
                     type="button"
@@ -144,7 +144,7 @@ export function DayColumn({
                       setPicker(false);
                     }}
                   >
-                    <span className="flex items-center gap-2 min-w-0">
+                    <span className="flex items-center gap-2 min-w-0" style={{ paddingLeft: depth * 12 }}>
                       <SDot color={p.color} />
                       <span className="truncate">{p.name}</span>
                     </span>
