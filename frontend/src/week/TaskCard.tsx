@@ -1,5 +1,4 @@
-import { useState, type DragEvent } from "react";
-import { Link } from "react-router-dom";
+import { type DragEvent } from "react";
 import { Check } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import { breadcrumb } from "../data/selectors";
@@ -14,14 +13,15 @@ export function TaskCard({
   dropBefore,
   onCardDragOver,
   onCardDrop,
+  onOpen,
 }: {
   task: Task;
   dropBefore: boolean;
   onCardDragOver: (e: DragEvent) => void;
   onCardDrop: (e: DragEvent) => void;
+  onOpen: (id: number) => void;
 }) {
   const { tasks, projects, patch } = useData();
-  const [openDetail, setOpenDetail] = useState(false);
   const crumb = breadcrumb(tasks, task.id);
   const color = projects.get(task.projectId)?.color ?? "var(--check)";
   const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < todayISO();
@@ -45,7 +45,7 @@ export function TaskCard({
         <button
           type="button"
           className="task-title flex-1 min-w-0 text-left"
-          onClick={() => setOpenDetail((v) => !v)}
+          onClick={() => onOpen(task.id)}
           title="Детали"
         >
           {task.title}
@@ -60,24 +60,6 @@ export function TaskCard({
             <span className={`mmeta whitespace-nowrap ${dueOverdue ? "!text-over" : ""}`}>до {fmtDayChip(task.dueOn)}</span>
           )}
           {crumb && <span className="crumb flex-1">{crumb}</span>}
-        </div>
-      )}
-      {openDetail && (
-        <div className="pl-[27px] flex flex-col gap-2">
-          <textarea
-            className="ghost-input border border-line rounded-[10px] px-2.5 py-2 text-[12.5px] min-h-[56px] resize-y"
-            name="task-description"
-            aria-label="Описание задачи"
-            placeholder="Описание…"
-            defaultValue={task.description}
-            onBlur={(e) => {
-              const v = e.target.value;
-              if (v !== task.description) void patch(task.id, { description: v });
-            }}
-          />
-          <Link to={`/projects/${task.projectId}?focus=${task.id}`} className="mmeta !text-accent self-start">
-            в дереве →
-          </Link>
         </div>
       )}
     </div>

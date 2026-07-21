@@ -3,8 +3,10 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { MLabel, SBar, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import { childProjects, projectSubtreeIds, projectUndone } from "../data/selectors";
+import { TaskDetails } from "../components/TaskDetails";
 import { PALETTE, nextColor, type Project } from "../data/types";
 import { getDragTask, hasDragTask } from "./dnd";
+import { ConfirmButton } from "../components/ConfirmButton";
 import { TreeView } from "./TreeView";
 
 export const LAST_PROJECT_KEY = "workspace-last-project";
@@ -32,7 +34,8 @@ function loadClosed(): Set<number> {
 
 export function ProjectsView() {
   const { pid } = useParams();
-  const { projects, loading, offline, retry } = useData();
+  const { projects, tasks, loading, offline, retry } = useData();
+  const [selected, setSelected] = useState<number | null>(null);
 
   if (loading) {
     return <p className="text-[13px] text-dim">Загрузка…</p>;
@@ -64,11 +67,16 @@ export function ProjectsView() {
     // приватный режим — выбор не переживёт перезагрузку
   }
 
+  // выбранная задача исчезла или сменила проект — сбрасываем выбор
+  const selectedTask = selected !== null ? tasks.get(selected) : undefined;
+  const effectiveSelected =
+    selectedTask && current && selectedTask.projectId === current.id ? selected : null;
+
   return (
     <div className="projects-layout">
       <Sidebar currentId={current?.id ?? null} />
       {current ? (
-        <TreeView key={current.id} project={current} />
+        <TreeView key={current.id} project={current} selectedId={effectiveSelected} onSelect={setSelected} />
       ) : (
         <div className="flex-1 panel px-6 py-8 text-center">
           <p className="text-[14px] font-semibold m-0">Проектов пока нет</p>
@@ -76,6 +84,15 @@ export function ProjectsView() {
             Создай первый в колонке слева — например «Работа» или «Быт».
           </p>
         </div>
+      )}
+      {current && (
+        <aside className="inspector panel px-4 py-4">
+          {effectiveSelected !== null ? (
+            <TaskDetails taskId={effectiveSelected} variant="panel" onClose={() => setSelected(null)} />
+          ) : (
+            <p className="text-[13px] text-dim m-0">Выбери задачу — здесь появятся её детали.</p>
+          )}
+        </aside>
       )}
     </div>
   );
@@ -142,7 +159,10 @@ function Sidebar({ currentId }: { currentId: number | null }) {
         />
       ))}
       <div className="proj-row !cursor-text">
-        <SDot color="var(--check)" />
+        <span className="chevron !w-[16px] chevron-empty">▶</span>
+        <span className="color-btn" aria-hidden="true">
+          <SBar color="var(--check)" />
+        </span>
         <input
           className="ghost-input flex-1 text-[13.5px]"
           name="new-project"
@@ -354,11 +374,10 @@ function SidebarNode({
             }}
           />
         ) : (
-          <button
-            type="button"
+          <span
             className="flex-1 min-w-0 text-left truncate"
-            title={active ? "Переименовать" : project.name}
-            onClick={(e) => {
+            title={active ? "Двойной клик — переименовать" : project.name}
+            onDoubleClick={(e) => {
               if (active) {
                 e.stopPropagation();
                 setRenaming(true);
@@ -366,7 +385,7 @@ function SidebarNode({
             }}
           >
             {project.name}
-          </button>
+          </span>
         )}
         {undone > 0 && <span className="mmeta">{undone}</span>}
         <div className="row-actions">
@@ -383,17 +402,15 @@ function SidebarNode({
             ＋
           </button>
           {isEmpty ? (
-            <button
-              type="button"
+            <ConfirmButton
               className="row-btn row-btn-danger"
-              title="Удалить проект"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm(`Удалить проект «${project.name}»?`)) void removeProject(project.id);
-              }}
+              armedClassName="!bg-over/15 !text-over"
+              confirmLabel="✓"
+              title="Удалить проект (второй клик подтверждает)"
+              onConfirm={() => void removeProject(project.id)}
             >
               ✕
-            </button>
+            </ConfirmButton>
           ) : (
             <button
               type="button"
@@ -425,7 +442,10 @@ function SidebarNode({
 
       {open && adding && (
         <div className="proj-row !cursor-text" style={{ marginLeft: (depth + 1) * 14 }}>
-          <SDot color="var(--check)" />
+          <span className="chevron !w-[16px] chevron-empty">▶</span>
+          <span className="color-btn" aria-hidden="true">
+            <SBar color="var(--check)" />
+          </span>
           <input
             className="ghost-input flex-1 text-[13px]"
             name="new-subproject"
@@ -480,16 +500,15 @@ function ArchivedRow({ project, onOpen }: { project: Project; onOpen: (id: numbe
           ⤴
         </button>
         {!hasAnything && (
-          <button
-            type="button"
+          <ConfirmButton
             className="row-btn row-btn-danger"
-            title="Удалить"
-            onClick={() => {
-              if (window.confirm(`Удалить проект «${project.name}»?`)) void removeProject(project.id);
-            }}
+            armedClassName="!bg-over/15 !text-over"
+            confirmLabel="✓"
+            title="Удалить (второй клик подтверждает)"
+            onConfirm={() => void removeProject(project.id)}
           >
             ✕
-          </button>
+          </ConfirmButton>
         )}
       </div>
     </div>

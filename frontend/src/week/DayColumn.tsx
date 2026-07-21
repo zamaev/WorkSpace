@@ -10,10 +10,12 @@ export function DayColumn({
   day,
   quickProject,
   onQuickProject,
+  onOpen,
 }: {
   day: string;
   quickProject: number | null;
   onQuickProject: (id: number) => void;
+  onOpen: (id: number) => void;
 }) {
   const { tasks, projects, create, patch } = useData();
   const [colDrop, setColDrop] = useState(false);
@@ -121,7 +123,7 @@ export function DayColumn({
         {list.length > 0 && <span className="mmeta">{list.filter((t) => t.done).length}/{list.length}</span>}
       </div>
       {spans.map((t) => (
-        <SpanCard key={`s${t.id}`} task={t} day={day} />
+        <SpanCard key={`s${t.id}`} task={t} day={day} onOpen={onOpen} />
       ))}
       {list.map((t) => (
         <TaskCard
@@ -130,6 +132,7 @@ export function DayColumn({
           dropBefore={dropBeforeId === t.id}
           onCardDragOver={dragOverCard(t.id)}
           onCardDrop={dropOnCard(t.id)}
+          onOpen={onOpen}
         />
       ))}
       {project ? (
@@ -171,7 +174,7 @@ export function DayColumn({
             className="ghost-input flex-1 text-[13px]"
             name="day-quick-add"
             aria-label={`Новая задача на ${fmtDayHeader(day)}`}
-            placeholder="＋ задача…"
+            placeholder={`＋ в ${project.name}…`}
             value={draft}
             disabled={busy}
             onChange={(e) => setDraft(e.target.value)}
@@ -195,7 +198,7 @@ export function DayColumn({
 
 // «Продолжение» многодневной задачи: чекбокс + приглушённое название + «k/N».
 // Drag двигает весь диапазон (обрабатывает колонка-приёмник).
-function SpanCard({ task, day }: { task: import("../data/types").Task; day: string }) {
+function SpanCard({ task, day, onOpen }: { task: import("../data/types").Task; day: string; onOpen: (id: number) => void }) {
   const { patch } = useData();
   const k = dayDiff(task.scheduledOn!, day) + 1;
   const n = dayDiff(task.scheduledOn!, task.endOn!) + 1;
@@ -207,7 +210,14 @@ function SpanCard({ task, day }: { task: import("../data/types").Task; day: stri
         label={task.done ? "Снять отметку" : "Отметить сделанной"}
         onClick={() => void patch(task.id, { done: !task.done })}
       />
-      <span className={`flex-1 min-w-0 truncate text-[12.5px] ${task.done ? "line-through" : ""}`}>{task.title}</span>
+      <button
+        type="button"
+        className={`flex-1 min-w-0 truncate text-left text-[12.5px] ${task.done ? "line-through" : ""}`}
+        onClick={() => onOpen(task.id)}
+        title="Детали"
+      >
+        {task.title}
+      </button>
       <span className="mmeta">{k}/{n}</span>
     </div>
   );

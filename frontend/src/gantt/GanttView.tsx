@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Link } from "react-router-dom";
 import { MLabel, SBar } from "../components/ui";
+import { TaskModal } from "../components/TaskDetails";
 import { useData } from "../data/DataProvider";
 import { childProjects, childrenOf, projectUndone, rootTasks } from "../data/selectors";
 import type { Project, Task } from "../data/types";
@@ -8,6 +8,9 @@ import { addDays, todayISO } from "../lib/dates";
 import { DAY_W, NAME_W, buildScale, dayIndex, monthSegments, saturdayOffset, xOf, type Scale } from "./timeline";
 
 const OPEN_KEY = "workspace-gantt-open";
+// текст задач начинается там же, где текст имени проекта:
+// паддинг 10 + шеврон 22 + gap 8 + полоска 3 + gap 8
+const TEXT_INDENT = 51;
 const ARCHIVE_KEY = "workspace-gantt-archived";
 const PROJECT_ROW_H = 40;
 const TASK_ROW_H = 30;
@@ -93,6 +96,7 @@ export function GanttView() {
   const today = todayISO();
   const [open, setOpen] = useState<Set<number>>(loadOpen);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [modalTask, setModalTask] = useState<number | null>(null);
   const [showArchived, setShowArchived] = useState(() => {
     try {
       return localStorage.getItem(ARCHIVE_KEY) === "1";
@@ -302,6 +306,7 @@ export function GanttView() {
               startDrag={startDrag}
               undone={projectUndone(tasks, projects, p.id)}
               onSetDates={() => void patchProject(p.id, { startOn: today, dueOn: addDays(today, 13) })}
+              onOpenTask={setModalTask}
             />
           ))}
 
@@ -309,6 +314,7 @@ export function GanttView() {
           <div className="g-today" style={{ left: NAME_W + xOf(scale, today) + DAY_W / 2 - 1 }} />
         </div>
       </div>
+      {modalTask !== null && <TaskModal taskId={modalTask} onClose={() => setModalTask(null)} />}
       <p className="pt-3 text-[12px] text-dim">
         Полосу можно двигать целиком, края — тянуть; ромб — одна из двух дат. Даты задач назначаются в «Проектах» и
         «Неделе», здесь — двигаются.
@@ -351,6 +357,7 @@ function ProjectRows({
   startDrag,
   undone,
   onSetDates,
+  onOpenTask,
 }: {
   project: Project;
   depth: number;
@@ -364,6 +371,7 @@ function ProjectRows({
   startDrag: (kind: "project" | "task", id: number, mode: Drag["mode"]) => (e: ReactPointerEvent) => void;
   undone: number;
   onSetDates: () => void;
+  onOpenTask: (id: number) => void;
 }) {
   const { start, end } = applyDrag(project.startOn, project.dueOn, drag, "project", project.id);
 
@@ -410,14 +418,15 @@ function ProjectRows({
         const td = applyTaskDrag(task.scheduledOn, task.endOn, task.dueOn, drag, task.id);
         return (
           <div className={`g-row ${project.archived ? "opacity-50" : ""}`} style={{ height: TASK_ROW_H }} key={task.id}>
-            <div className="g-name" style={{ width: NAME_W, paddingLeft: 34 + (depth + taskDepth) * 14 }}>
-              <Link
-                to={`/projects/${project.id}?focus=${task.id}`}
-                className={`flex-1 min-w-0 truncate text-[12.5px] ${task.done ? "text-dim line-through" : ""}`}
-                title={`${task.title} — открыть в дереве`}
+            <div className="g-name" style={{ width: NAME_W, paddingLeft: TEXT_INDENT + (depth + taskDepth) * 14 }}>
+              <button
+                type="button"
+                className={`flex-1 min-w-0 truncate text-left text-[12.5px] ${task.done ? "text-dim line-through" : ""} ${!task.scheduledOn && !task.dueOn ? "opacity-45" : ""}`}
+                title={task.title}
+                onClick={() => onOpenTask(task.id)}
               >
                 {task.title}
-              </Link>
+              </button>
             </div>
             <div className="g-track" style={{ width: totalW }}>
               <div className="g-wknd" style={{ backgroundImage: weekendBg }} />

@@ -46,13 +46,13 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="topbar">
         <div className="mlabel mlabel-accent">WORKSPACE</div>
         <nav className="flex gap-2">
-          <NavLink to="/projects" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink to="/projects" title="Проекты — клавиша 1" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Проекты
           </NavLink>
-          <NavLink to="/week" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink to="/week" title="Неделя — клавиша 2" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Неделя
           </NavLink>
-          <NavLink to="/gantt" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink to="/gantt" title="Гант — клавиша 3" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Гант
           </NavLink>
         </nav>
