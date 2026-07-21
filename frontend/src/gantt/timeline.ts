@@ -1,4 +1,6 @@
-import { addDays } from "../lib/dates";
+import { addDays, dayDiff } from "../lib/dates";
+
+export { dayDiff };
 
 // Математика шкалы Ганта: перевод дат в пиксели и обратно.
 // Все входы — локальные YYYY-MM-DD строки, как везде в приложении.
@@ -14,15 +16,6 @@ export type Scale = {
 function local(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
-}
-
-// Разница в днях b - a (целые дни, DST-безопасно через полдень).
-export function dayDiff(a: string, b: string): number {
-  const da = local(a);
-  const db = local(b);
-  da.setHours(12, 0, 0, 0);
-  db.setHours(12, 0, 0, 0);
-  return Math.round((db.getTime() - da.getTime()) / 86_400_000);
 }
 
 // Диапазон шкалы: все даты + запас; минимум — рабочее окно вокруг сегодня.

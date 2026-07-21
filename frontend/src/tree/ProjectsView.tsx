@@ -315,9 +315,9 @@ function SidebarNode({
             <SBar color={project.color} />
           </button>
           {picker && (
-            <div className="popover !left-0 !right-auto !w-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="popover popover-left" onClick={(e) => e.stopPropagation()}>
               <div className="mlabel mb-2">Цвет</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-6 gap-2 w-max">
                 {PALETTE.map((c) => (
                   <button
                     key={c}

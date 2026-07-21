@@ -22,6 +22,15 @@ export function todayISO(): string {
   return toISO(new Date());
 }
 
+// Разница в днях b - a (целые дни, DST-безопасно через полдень).
+export function dayDiff(a: string, b: string): number {
+  const da = local(a);
+  const db = local(b);
+  da.setHours(12, 0, 0, 0);
+  db.setHours(12, 0, 0, 0);
+  return Math.round((db.getTime() - da.getTime()) / 86_400_000);
+}
+
 export function addDays(iso: string, n: number): string {
   const d = local(iso);
   d.setDate(d.getDate() + n);

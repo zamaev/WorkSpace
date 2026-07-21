@@ -5,7 +5,7 @@ import { useData } from "../data/DataProvider";
 import { breadcrumb } from "../data/selectors";
 import type { Task } from "../data/types";
 import { setDragTask } from "../tree/dnd";
-import { fmtDayChip, todayISO } from "../lib/dates";
+import { dayDiff, fmtDayChip, todayISO } from "../lib/dates";
 
 // Карточка задачи в колонке дня. dropBefore приходит от DayColumn —
 // подсветка «вставить перед этой карточкой».
@@ -50,6 +50,9 @@ export function TaskCard({
         >
           {task.title}
         </button>
+        {task.endOn && task.scheduledOn && (
+          <span className="mmeta whitespace-nowrap">1/{dayDiff(task.scheduledOn, task.endOn) + 1}</span>
+        )}
       </div>
       {(crumb || task.dueOn) && (
         <div className="flex items-center gap-2 pl-[27px] min-w-0">

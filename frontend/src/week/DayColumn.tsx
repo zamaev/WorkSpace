@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { SDot } from "../components/ui";
+import { Check, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { flattenActiveProjects, isTaskVisible, tasksOn } from "../data/selectors";
-import { fmtDayHeader, todayISO } from "../lib/dates";
-import { getDragTask, hasDragTask } from "../tree/dnd";
+import { flattenActiveProjects, isTaskVisible, spanTasksOn, tasksOn } from "../data/selectors";
+import { addDays, dayDiff, fmtDayHeader, todayISO } from "../lib/dates";
+import { getDragTask, hasDragTask, setDragTask } from "../tree/dnd";
 import { TaskCard } from "./TaskCard";
 
 export function DayColumn({
@@ -24,6 +24,7 @@ export function DayColumn({
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const list = tasksOn(tasks, day).filter((t) => isTaskVisible(projects, t));
+  const spans = spanTasksOn(tasks, day).filter((t) => isTaskVisible(projects, t));
   const isToday = day === todayISO();
   const project = quickProject !== null ? projects.get(quickProject) : undefined;
 
@@ -62,6 +63,12 @@ export function DayColumn({
       void patch(id, { dayPosition: rest.length });
       return;
     }
+    // многодневная переезжает целиком: начало — на целевой день
+    if (t.scheduledOn !== null && t.endOn !== null) {
+      const len = dayDiff(t.scheduledOn, t.endOn);
+      void patch(id, { scheduledOn: day, endOn: addDays(day, len) });
+      return;
+    }
     void patch(id, { scheduledOn: day });
   };
 
@@ -79,6 +86,9 @@ export function DayColumn({
     if (!t) return;
     if (t.scheduledOn === day) {
       void patch(id, { dayPosition: idx });
+    } else if (t.scheduledOn !== null && t.endOn !== null) {
+      const len = dayDiff(t.scheduledOn, t.endOn);
+      void patch(id, { scheduledOn: day, endOn: addDays(day, len), dayPosition: idx });
     } else {
       void patch(id, { scheduledOn: day, dayPosition: idx });
     }
@@ -110,6 +120,9 @@ export function DayColumn({
         <span className={`text-[13px] font-semibold ${isToday ? "text-accent" : ""}`}>{fmtDayHeader(day)}</span>
         {list.length > 0 && <span className="mmeta">{list.filter((t) => t.done).length}/{list.length}</span>}
       </div>
+      {spans.map((t) => (
+        <SpanCard key={`s${t.id}`} task={t} day={day} />
+      ))}
       {list.map((t) => (
         <TaskCard
           key={t.id}
@@ -132,7 +145,7 @@ export function DayColumn({
               <SDot color={project.color} />
             </button>
             {picker && (
-              <div className="popover !left-0 !right-auto w-[200px]">
+              <div className="popover popover-left !w-[200px]">
                 <div className="mlabel mb-1">В какой проект</div>
                 {flattenActiveProjects(projects).map(({ project: p, depth }) => (
                   <button
@@ -176,6 +189,26 @@ export function DayColumn({
       ) : (
         <p className="text-[12px] text-dim px-1 pt-1 m-0">Сначала создай проект</p>
       )}
+    </div>
+  );
+}
+
+// «Продолжение» многодневной задачи: чекбокс + приглушённое название + «k/N».
+// Drag двигает весь диапазон (обрабатывает колонка-приёмник).
+function SpanCard({ task, day }: { task: import("../data/types").Task; day: string }) {
+  const { patch } = useData();
+  const k = dayDiff(task.scheduledOn!, day) + 1;
+  const n = dayDiff(task.scheduledOn!, task.endOn!) + 1;
+  return (
+    <div className="span-card" draggable onDragStart={(e) => setDragTask(e, task.id)}>
+      <Check
+        size="sm"
+        done={task.done}
+        label={task.done ? "Снять отметку" : "Отметить сделанной"}
+        onClick={() => void patch(task.id, { done: !task.done })}
+      />
+      <span className={`flex-1 min-w-0 truncate text-[12.5px] ${task.done ? "line-through" : ""}`}>{task.title}</span>
+      <span className="mmeta">{k}/{n}</span>
     </div>
   );
 }
