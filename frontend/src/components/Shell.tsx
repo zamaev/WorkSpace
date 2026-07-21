@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnchoredPopover } from "./AnchoredPopover";
 import { NavLink, useNavigate } from "react-router-dom";
 
 function applyTheme(theme: "dark" | "light") {
@@ -22,6 +23,8 @@ function typingTarget(e: KeyboardEvent): boolean {
 
 export function Shell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"dark" | "light">(initialTheme);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,6 +34,7 @@ export function Shell({ children }: { children: ReactNode }) {
       if (e.key === "2") navigate("/week");
       if (e.key === "3") navigate("/gantt");
       if (e.key === "4") navigate("/team");
+      if (e.key === "5") navigate("/types");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -59,15 +63,51 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/team" title="Команда — клавиша 4" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Команда
           </NavLink>
+          <NavLink to="/types" title="Типы — клавиша 5" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+            Типы
+          </NavLink>
         </nav>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-        >
-          {theme === "dark" ? "☀" : "☾"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            ref={helpRef}
+            type="button"
+            className="icon-btn"
+            title="Подсказки"
+            aria-label="Подсказки"
+            onClick={() => setHelpOpen((v) => !v)}
+          >
+            ?
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
+        </div>
+        {helpOpen && (
+          <AnchoredPopover anchorRef={helpRef} onClose={() => setHelpOpen(false)}>
+            <div className="w-[280px] flex flex-col gap-2 text-[12.5px]">
+              <div className="mlabel">Клавиши</div>
+              <div className="flex flex-col gap-1">
+                <span><span className="mmeta">1–5</span> — Проекты · Неделя · Гант · Команда · Типы</span>
+                <span><span className="mmeta">T</span> — текущая неделя (в «Неделе»)</span>
+                <span><span className="mmeta">Esc</span> — закрыть попап/модал</span>
+              </div>
+              <div className="mlabel pt-1">Жесты</div>
+              <div className="flex flex-col gap-1">
+                <span>Двойной клик по названию — переименовать</span>
+                <span>Удаление: первый клик — «точно?», второй — удалить</span>
+                <span>Дерево: тащи строку — середина «внутрь», край — рядом</span>
+                <span>Задачу можно бросить на проект в сайдбаре</span>
+                <span>Гант: полосу — двигать, края — тянуть, ромб/флажок — тоже</span>
+                <span>Границы колонок в «Проектах» перетаскиваются</span>
+              </div>
+            </div>
+          </AnchoredPopover>
+        )}
       </header>
       {children}
     </div>

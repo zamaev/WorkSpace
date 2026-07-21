@@ -1,5 +1,6 @@
 import { type DragEvent } from "react";
 import { AvatarDot, Check } from "../components/ui";
+import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
 import { breadcrumb } from "../data/selectors";
 import type { Task } from "../data/types";
@@ -59,9 +60,7 @@ export function TaskCard({
           {task.assigneeId !== null && people.get(task.assigneeId) && (
             <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={15} />
           )}
-          {task.typeId !== null && types.get(task.typeId) && (
-            <span className="mlabel !opacity-70 whitespace-nowrap">{types.get(task.typeId)!.name}</span>
-          )}
+          {task.typeId !== null && types.get(task.typeId) && <TypeBadge type={types.get(task.typeId)!} size={13} />}
           {task.dueOn && (
             <span className={`mmeta whitespace-nowrap ${dueOverdue ? "!text-over" : ""}`}>до {fmtDayChip(task.dueOn)}</span>
           )}

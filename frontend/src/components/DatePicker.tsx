@@ -18,6 +18,7 @@ export function DatePicker({
   value,
   endValue,
   title = "Дата",
+  allowRange = false,
   onPick,
   onPickEnd,
   onClose,
@@ -25,27 +26,33 @@ export function DatePicker({
   value: string | null;
   endValue?: string | null;
   title?: string;
+  allowRange?: boolean;
   onPick: (iso: string | null) => void;
   onPickEnd?: (iso: string | null) => void;
   onClose: () => void;
 }) {
   const today = todayISO();
   const [month, setMonth] = useState(() => firstOfMonth(value ?? today));
-  const [pickingEnd, setPickingEnd] = useState(false);
+  const [rangeMode, setRangeMode] = useState(() => endValue != null);
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
 
   const pickDay = (iso: string) => {
-    if (pickingEnd && onPickEnd && value) {
-      if (iso < value) {
-        // клик раньше начала в режиме «по…» — переносим начало
+    if (allowRange && rangeMode && onPickEnd) {
+      // диапазон: первый клик — начало (старый конец сбрасывается),
+      // второй — конец; клик раньше начала переносит начало
+      if (pendingStart === null || iso < pendingStart) {
+        setPendingStart(iso);
         onPick(iso);
-      } else {
-        onPickEnd(iso);
-        setPickingEnd(false);
+        onPickEnd(null);
+        return;
       }
+      onPickEnd(iso);
+      setPendingStart(null);
       onClose();
       return;
     }
     onPick(iso);
+    if (endValue != null && onPickEnd) onPickEnd(null);
     onClose();
   };
 
@@ -53,8 +60,30 @@ export function DatePicker({
 
   return (
     <div>
-      <div className="flex items-center justify-between pb-2">
-        <MLabel>{pickingEnd ? `${title} · по…` : title}</MLabel>
+      <div className="flex items-center justify-between gap-3 pb-2">
+        <MLabel>{title}</MLabel>
+        {allowRange && (
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className={`seg !px-2 !py-1 !text-[11px] ${rangeMode ? "" : "seg-on"}`}
+              onClick={() => {
+                setRangeMode(false);
+                setPendingStart(null);
+              }}
+            >
+              День
+            </button>
+            <button
+              type="button"
+              className={`seg !px-2 !py-1 !text-[11px] ${rangeMode ? "seg-on" : ""}`}
+              onClick={() => setRangeMode(true)}
+              title="Первый клик — начало, второй — конец"
+            >
+              Диапазон
+            </button>
+          </div>
+        )}
         <div className="flex gap-1.5">
           <button type="button" className="chip" onClick={() => pickDay(today)}>
             Сегодня
@@ -87,7 +116,7 @@ export function DatePicker({
           </span>
         ))}
         {monthCells(month).map(({ iso, inMonth }) => {
-          const isSel = iso === value || iso === endValue;
+          const isSel = iso === value || iso === endValue || iso === pendingStart;
           const inRange = value !== null && endValue != null && iso > value && iso < endValue;
           return (
             <button
@@ -103,44 +132,21 @@ export function DatePicker({
       </div>
 
       <div className="flex items-center justify-between pt-1">
-        {onPickEnd && value ? (
+        <span className="mmeta">
+          {allowRange && rangeMode && pendingStart !== null ? `${fmtDayChip(pendingStart)} → выбери конец` : ""}
+        </span>
+        {value && (
           <button
             type="button"
-            className={`chip ${pickingEnd ? "chip-accent" : ""}`}
-            title="Выбрать последний день работы"
-            onClick={() => setPickingEnd((v) => !v)}
+            className="mmeta !text-over"
+            onClick={() => {
+              onPick(null);
+              onClose();
+            }}
           >
-            {endValue ? `по ${fmtDayChip(endValue)}` : "по…"}
+            Снять
           </button>
-        ) : (
-          <span />
         )}
-        <div className="flex gap-2">
-          {onPickEnd && endValue && (
-            <button
-              type="button"
-              className="mmeta"
-              onClick={() => {
-                onPickEnd(null);
-                onClose();
-              }}
-            >
-              снять «по»
-            </button>
-          )}
-          {value && (
-            <button
-              type="button"
-              className="mmeta !text-over"
-              onClick={() => {
-                onPick(null);
-                onClose();
-              }}
-            >
-              Снять
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
