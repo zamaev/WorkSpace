@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
-// Попап, привязанный к якорю через position:fixed — не обрезается
-// overflow-контейнерами (модал, инспектор), кламп к краям viewport.
+// Попап, привязанный к якорю: position:fixed + портал в body. Портал
+// обязателен: transform у модала (.sheet) делает его containing block'ом
+// для fixed-элементов, и без портала попап позиционировался бы от модала
+// и резался его overflow.
 export function AnchoredPopover({
   anchorRef,
   onClose,
@@ -50,7 +53,7 @@ export function AnchoredPopover({
     };
   }, [onClose, anchorRef]);
 
-  return (
+  return createPortal(
     <div
       ref={ref}
       className="popover !w-max"
@@ -58,6 +61,7 @@ export function AnchoredPopover({
       onClick={(e) => e.stopPropagation()}
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }
