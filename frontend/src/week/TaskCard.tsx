@@ -19,13 +19,15 @@ export function TaskCard({
   onCardDragOver: (e: DragEvent) => void;
   onCardDrop: (e: DragEvent) => void;
 }) {
-  const { tasks, patch } = useData();
+  const { tasks, projects, patch } = useData();
   const [openDetail, setOpenDetail] = useState(false);
   const crumb = breadcrumb(tasks, task.id);
+  const color = projects.get(task.projectId)?.color ?? "var(--check)";
 
   return (
     <div
       className={`task-card ${task.done ? "task-card-done" : ""} ${dropBefore ? "card-drop-before" : ""}`}
+      style={{ borderLeft: `3px solid ${color}` }}
       draggable
       onDragStart={(e) => setDragTask(e, task.id)}
       onDragOver={onCardDragOver}
@@ -61,7 +63,7 @@ export function TaskCard({
               if (v !== task.description) void patch(task.id, { description: v });
             }}
           />
-          <Link to={`/?focus=${task.id}`} className="mmeta !text-accent self-start">
+          <Link to={`/projects/${task.projectId}?focus=${task.id}`} className="mmeta !text-accent self-start">
             в дереве →
           </Link>
         </div>

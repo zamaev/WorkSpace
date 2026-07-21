@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useData } from "../data/DataProvider";
 import { rootTasks } from "../data/selectors";
+import type { Project } from "../data/types";
 import { MLabel } from "../components/ui";
 import { NewTaskInput, TreeNode } from "./TreeNode";
-import { WeekStrip } from "./WeekStrip";
 
 const CLOSED_KEY = "workspace-closed";
 
@@ -18,8 +18,9 @@ function loadClosed(): Set<number> {
   return new Set();
 }
 
-export function TreeView() {
-  const { tasks, loading, offline, retry, create } = useData();
+// Дерево задач одного проекта (правая панель раздела «Проекты»).
+export function TreeView({ project }: { project: Project }) {
+  const { tasks, create } = useData();
   // храним свёрнутые (а не раскрытые): новые узлы по умолчанию раскрыты
   const [closed, setClosed] = useState<Set<number>>(loadClosed);
   const [params, setParams] = useSearchParams();
@@ -43,7 +44,7 @@ export function TreeView() {
   // переход «в дереве →» из недели: раскрыть путь, подсветить, проскроллить
   useEffect(() => {
     const focus = params.get("focus");
-    if (!focus || loading) return;
+    if (!focus) return;
     const id = Number(focus);
     if (!tasks.has(id)) return;
     setClosed((prev) => {
@@ -61,37 +62,32 @@ export function TreeView() {
       setParams({}, { replace: true });
     }, 2200);
     return () => clearTimeout(timer);
-  }, [params, loading, tasks, setParams]);
+  }, [params, tasks, setParams]);
 
-  if (loading) {
-    return <p className="text-[13px] text-dim">Загрузка…</p>;
-  }
-  if (offline) {
-    return (
-      <div className="banner">
-        Нет связи с сервером
-        <button type="button" className="seg" onClick={retry}>
-          Повторить
-        </button>
-      </div>
-    );
-  }
-
-  const roots = rootTasks(tasks);
+  const roots = rootTasks(tasks, project.id);
 
   return (
-    <div className="pb-[120px]">
-      <div className="panel px-3 py-3">
-        <MLabel className="px-3 pb-2">Дерево задач</MLabel>
-        {roots.length === 0 && (
-          <p className="px-3 py-2 text-[13px] text-dim">Пусто. Создай первую ветку — например «Работа» или «Быт».</p>
-        )}
-        {roots.map((t) => (
-          <TreeNode key={t.id} task={t} depth={0} isOpen={isOpen} toggleOpen={toggleOpen} flashId={flashId} />
-        ))}
-        <NewTaskInput depth={0} placeholder="Новая ветка…" onSubmit={async (title) => void (await create({ title }))} />
-      </div>
-      <WeekStrip />
+    <div className="flex-1 min-w-0 panel px-3 py-3">
+      <MLabel className="px-3 pb-2">{project.name}</MLabel>
+      {roots.length === 0 && (
+        <p className="px-3 py-2 text-[13px] text-dim">В проекте пусто. Добавь первую задачу.</p>
+      )}
+      {roots.map((t) => (
+        <TreeNode
+          key={t.id}
+          task={t}
+          depth={0}
+          color={project.color}
+          isOpen={isOpen}
+          toggleOpen={toggleOpen}
+          flashId={flashId}
+        />
+      ))}
+      <NewTaskInput
+        depth={0}
+        placeholder="Новая задача…"
+        onSubmit={async (title) => void (await create({ title, projectId: project.id }))}
+      />
     </div>
   );
 }

@@ -1,20 +1,48 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { MLabel } from "../components/ui";
+import { MLabel, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { breadcrumb, overdue } from "../data/selectors";
+import { breadcrumb, overdue, sortedProjects } from "../data/selectors";
+import { LAST_PROJECT_KEY } from "../tree/ProjectsView";
 import { addDays, fmtDayChip, fmtWeekRange, mondayOf, todayISO, weekDays } from "../lib/dates";
 import { plural } from "../lib/plural";
 import { DayColumn } from "./DayColumn";
 
 const OVERDUE_KEY = "workspace-overdue-collapsed";
+const QUICK_PROJECT_KEY = "workspace-quick-project";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+function readStoredId(key: string): number | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? Number(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function WeekView() {
-  const { tasks, loading, offline, retry, patch } = useData();
+  const { tasks, projects, loading, offline, retry, patch } = useData();
   const { date } = useParams();
   const navigate = useNavigate();
   const today = todayISO();
+
+  // проект для быстрых задач: явный выбор → последний открытый → первый
+  const [quickProject, setQuickProject] = useState<number | null>(
+    () => readStoredId(QUICK_PROJECT_KEY) ?? readStoredId(LAST_PROJECT_KEY),
+  );
+  const effectiveQuick =
+    quickProject !== null && projects.has(quickProject)
+      ? quickProject
+      : (sortedProjects(projects)[0]?.id ?? null);
+  const pickQuickProject = (id: number) => {
+    setQuickProject(id);
+    try {
+      localStorage.setItem(QUICK_PROJECT_KEY, String(id));
+    } catch {
+      // приватный режим — выбор не переживёт перезагрузку
+    }
+  };
 
   const anchor = date && DATE_RE.test(date) ? date : today;
   const monday = mondayOf(anchor);
@@ -99,6 +127,7 @@ export function WeekView() {
                 const crumb = breadcrumb(tasks, t.id);
                 return (
                   <div key={t.id} className="flex items-center gap-3 py-1.5 border-b border-line last:border-b-0">
+                    <SDot color={projects.get(t.projectId)?.color ?? "var(--check)"} />
                     <span className="mmeta !text-over whitespace-nowrap">{fmtDayChip(t.scheduledOn!)}</span>
                     <span className="text-[13px] flex-1 min-w-0 truncate">{t.title}</span>
                     {crumb && <span className="crumb max-w-[220px]">{crumb}</span>}
@@ -118,7 +147,7 @@ export function WeekView() {
 
       <div className="week-grid">
         {days.map((d) => (
-          <DayColumn key={d} day={d} />
+          <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} />
         ))}
       </div>
       {empty && <p className="pt-4 text-[13px] text-dim text-center">На этой неделе пусто — перетащи задачи из дерева или добавь прямо в день.</p>}

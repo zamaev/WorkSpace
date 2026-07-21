@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { DataProvider } from "./data/DataProvider";
-import { TreeView } from "./tree/TreeView";
+import { ProjectsView } from "./tree/ProjectsView";
 import { WeekView } from "./week/WeekView";
 
 export default function App() {
@@ -10,9 +10,10 @@ export default function App() {
       <DataProvider>
         <Shell>
           <Routes>
-            <Route path="/" element={<TreeView />} />
+            <Route path="/" element={<Navigate to="/projects" replace />} />
+            <Route path="/projects/:pid?" element={<ProjectsView />} />
             <Route path="/week/:date?" element={<WeekView />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/projects" replace />} />
           </Routes>
         </Shell>
       </DataProvider>
