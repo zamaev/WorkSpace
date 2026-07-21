@@ -1,0 +1,2 @@
+ALTER TABLE projects ADD COLUMN parent_id INTEGER REFERENCES projects(id);
+ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;

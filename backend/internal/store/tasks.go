@@ -53,6 +53,8 @@ type UpdateReq struct {
 	DueOn          *string
 	SetParentID    bool
 	ParentID       *int64
+	SetProjectID   bool
+	ProjectID      *int64 // перенос в корень указанного проекта
 	Position       *int
 	DayPosition    *int
 }
@@ -92,6 +94,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 			return Task{}, nil, err
 		}
 	}
+	if r.ScheduledOn != nil && r.DueOn != nil && *r.DueOn < *r.ScheduledOn {
+		return Task{}, nil, fmt.Errorf("%w: дедлайн раньше запланированного дня", ErrValidation)
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		return Task{}, nil, err
@@ -112,8 +117,15 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 		if r.ProjectID == nil {
 			return Task{}, nil, fmt.Errorf("%w: корневой задаче нужен проект", ErrValidation)
 		}
-		if err := projectExists(tx, *r.ProjectID); err != nil {
+		proj, err := loadProject(tx, *r.ProjectID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return Task{}, nil, ErrBadProject
+			}
 			return Task{}, nil, err
+		}
+		if proj.Archived {
+			return Task{}, nil, ErrArchivedTarget
 		}
 		projectID = *r.ProjectID
 	}
@@ -151,9 +163,6 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	}
 
 	affected := map[int64]bool{id: true}
-	if err := uncheckAncestors(tx, id, affected); err != nil {
-		return Task{}, nil, err
-	}
 
 	task, err := loadOne(tx, id)
 	if err != nil {
@@ -218,11 +227,58 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if r.SetDueOn {
 		cur.DueOn = r.DueOn
 	}
+	// финальное состояние дат: дедлайн не может быть раньше плана
+	finalScheduled := cur.ScheduledOn
+	if r.SetScheduledOn {
+		finalScheduled = r.ScheduledOn
+	}
+	if finalScheduled != nil && cur.DueOn != nil && *cur.DueOn < *finalScheduled {
+		return nil, fmt.Errorf("%w: дедлайн раньше запланированного дня", ErrValidation)
+	}
 	if _, err := tx.Exec(
 		`UPDATE tasks SET title = ?, description = ?, done = ?, due_on = ?, updated_at = ? WHERE id = ?`,
 		cur.Title, cur.Description, cur.Done, cur.DueOn, now(), id,
 	); err != nil {
 		return nil, err
+	}
+
+	// перенос в корень другого проекта: эквивалент parentId=null в scope
+	// нового проекта
+	if r.SetProjectID && r.ProjectID != nil && *r.ProjectID != cur.ProjectID {
+		proj, err := loadProject(tx, *r.ProjectID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return nil, ErrBadProject
+			}
+			return nil, err
+		}
+		if proj.Archived {
+			return nil, ErrArchivedTarget
+		}
+		oldSibs, err := siblingIDs(tx, cur.ParentID, cur.ProjectID, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := renumberPositions(tx, oldSibs, affected); err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(`UPDATE tasks SET parent_id = NULL, updated_at = ? WHERE id = ?`, now(), id); err != nil {
+			return nil, err
+		}
+		if err := repaintSubtree(tx, id, *r.ProjectID, affected); err != nil {
+			return nil, err
+		}
+		newRoots, err := siblingIDs(tx, nil, *r.ProjectID, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := renumberPositions(tx, append(newRoots, id), affected); err != nil {
+			return nil, err
+		}
+		cur, err = loadOne(tx, id)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// перенос по дереву и/или позиция
@@ -263,6 +319,15 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 					return nil, err
 				}
 				targetProject = p.ProjectID
+			}
+			if targetProject != cur.ProjectID {
+				tp, err := loadProject(tx, targetProject)
+				if err != nil {
+					return nil, err
+				}
+				if tp.Archived {
+					return nil, ErrArchivedTarget
+				}
 			}
 			targetSibs, err = siblingIDs(tx, newParent, targetProject, id)
 			if err != nil {
@@ -332,32 +397,6 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		}
 	}
 
-	// каскад done — по финальному состоянию:
-	// отметил → вверх закрываются полностью сделанные ветки; снял → предки
-	// открываются; перенос несделанного поддерева открывает новых предков.
-	if r.Done != nil {
-		if *r.Done {
-			if err := completeAncestors(tx, id, affected); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := uncheckAncestors(tx, id, affected); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if parentChanged {
-		undone, err := subtreeHasUndone(tx, id)
-		if err != nil {
-			return nil, err
-		}
-		if undone {
-			if err := uncheckAncestors(tx, id, affected); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	tasks, err := loadMany(tx, affected)
 	if err != nil {
 		return nil, err
@@ -390,86 +429,6 @@ func DeleteTask(db *sql.DB, id int64) (int, error) {
 		return 0, err
 	}
 	return int(n), tx.Commit()
-}
-
-// ── каскад done ──
-
-// uncheckAncestors снимает done со всех предков задачи.
-func uncheckAncestors(e interface {
-	querier
-	execer
-}, id int64, affected map[int64]bool) error {
-	chain, err := ancestorIDs(e, id)
-	if err != nil {
-		return err
-	}
-	for _, aid := range chain {
-		res, err := e.Exec(`UPDATE tasks SET done = 0, updated_at = ? WHERE id = ? AND done = 1`, now(), aid)
-		if err != nil {
-			return err
-		}
-		if n, _ := res.RowsAffected(); n > 0 {
-			affected[aid] = true
-		}
-	}
-	return nil
-}
-
-// completeAncestors закрывает предков, у которых все прямые дети сделаны;
-// подъём останавливается на первом предке с несделанными детьми.
-func completeAncestors(e interface {
-	querier
-	execer
-}, id int64, affected map[int64]bool) error {
-	chain, err := ancestorIDs(e, id)
-	if err != nil {
-		return err
-	}
-	for _, aid := range chain {
-		var undone int
-		if err := e.QueryRow(`SELECT count(*) FROM tasks WHERE parent_id = ? AND done = 0`, aid).Scan(&undone); err != nil {
-			return err
-		}
-		if undone > 0 {
-			break
-		}
-		res, err := e.Exec(`UPDATE tasks SET done = 1, updated_at = ? WHERE id = ? AND done = 0`, now(), aid)
-		if err != nil {
-			return err
-		}
-		if n, _ := res.RowsAffected(); n > 0 {
-			affected[aid] = true
-		}
-	}
-	return nil
-}
-
-// ancestorIDs — цепочка предков от родителя к корню.
-func ancestorIDs(q querier, id int64) ([]int64, error) {
-	rows, err := q.Query(`
-		WITH RECURSIVE anc(id) AS (
-			SELECT parent_id FROM tasks WHERE id = ? AND parent_id IS NOT NULL
-			UNION ALL
-			SELECT t.parent_id FROM tasks t JOIN anc ON t.id = anc.id WHERE t.parent_id IS NOT NULL
-		)
-		SELECT id FROM anc`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanIDs(rows)
-}
-
-func subtreeHasUndone(q querier, id int64) (bool, error) {
-	var n int
-	err := q.QueryRow(`
-		WITH RECURSIVE sub(id) AS (
-			SELECT id FROM tasks WHERE id = ?
-			UNION ALL
-			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id
-		)
-		SELECT count(*) FROM tasks WHERE id IN (SELECT id FROM sub) AND done = 0`, id).Scan(&n)
-	return n > 0, err
 }
 
 func repaintSubtree(e interface {

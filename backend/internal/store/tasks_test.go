@@ -18,7 +18,7 @@ func openTest(t *testing.T) env {
 		t.Fatalf("открытие тестовой базы: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	p, err := CreateProject(db, "Тестовый", "#c9a96a")
+	p, err := CreateProject(db, "Тестовый", "#c9a96a", nil)
 	if err != nil {
 		t.Fatalf("создание проекта: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestReparentAndPositions(t *testing.T) {
 
 func TestRootsScopedByProject(t *testing.T) {
 	e := openTest(t)
-	p2, err := CreateProject(e.db, "Другой", "#8fb56b")
+	p2, err := CreateProject(e.db, "Другой", "#8fb56b", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,85 +182,42 @@ func TestRootsScopedByProject(t *testing.T) {
 	}
 }
 
-func TestCascadeDone(t *testing.T) {
+// Каскад отключён (v4): done родителя и детей полностью независимы.
+func TestNoAutoCascade(t *testing.T) {
 	e := openTest(t)
 	a := e.mk(t, "a", nil, nil)
 	b := e.mk(t, "b", &a.ID, nil)
 	c1 := e.mk(t, "c1", &b.ID, nil)
 	c2 := e.mk(t, "c2", &b.ID, nil)
 
-	// c1 done → b ещё нет (c2 не сделана)
+	// оба ребёнка done → родители НЕ закрываются
 	if _, err := UpdateTask(e.db, c1.ID, UpdateReq{Done: new(true)}); err != nil {
 		t.Fatal(err)
 	}
-	if e.get(t, b.ID).Done {
-		t.Errorf("b закрылась раньше времени")
-	}
-
-	// c2 done → b и a закрываются каскадом
-	affected, err := UpdateTask(e.db, c2.ID, UpdateReq{Done: new(true)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !e.get(t, b.ID).Done || !e.get(t, a.ID).Done {
-		t.Errorf("каскад вверх не сработал: b=%v a=%v", e.get(t, b.ID).Done, e.get(t, a.ID).Done)
-	}
-	ids := map[int64]bool{}
-	for _, task := range affected {
-		ids[task.ID] = true
-	}
-	if !ids[b.ID] || !ids[a.ID] {
-		t.Errorf("затронутые не содержат b/a")
-	}
-
-	// снял c1 → b и a открываются
-	if _, err := UpdateTask(e.db, c1.ID, UpdateReq{Done: new(false)}); err != nil {
+	if _, err := UpdateTask(e.db, c2.ID, UpdateReq{Done: new(true)}); err != nil {
 		t.Fatal(err)
 	}
 	if e.get(t, b.ID).Done || e.get(t, a.ID).Done {
-		t.Errorf("uncheck вверх не сработал")
+		t.Errorf("авто-каскад вверх не должен срабатывать")
 	}
 
-	// закрыли обратно, затем создание ребёнка открывает предков
-	if _, err := UpdateTask(e.db, c1.ID, UpdateReq{Done: new(true)}); err != nil {
-		t.Fatal(err)
-	}
-	if !e.get(t, a.ID).Done {
-		t.Fatalf("предусловие: a должна быть закрыта")
-	}
-	_, created, err := CreateTask(e.db, CreateReq{Title: "c3", ParentID: &b.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if e.get(t, b.ID).Done || e.get(t, a.ID).Done {
-		t.Errorf("создание не открыло предков")
-	}
-	ids = map[int64]bool{}
-	for _, task := range created {
-		ids[task.ID] = true
-	}
-	if !ids[b.ID] || !ids[a.ID] {
-		t.Errorf("затронутые создания не содержат предков: %v", ids)
-	}
-}
-
-func TestCascadeOnReparent(t *testing.T) {
-	e := openTest(t)
-	a := e.mk(t, "a", nil, nil)
-	b := e.mk(t, "b", &a.ID, nil)
+	// ручное закрытие родителя, затем создание ребёнка — родитель НЕ открывается
 	if _, err := UpdateTask(e.db, b.ID, UpdateReq{Done: new(true)}); err != nil {
 		t.Fatal(err)
 	}
-	if !e.get(t, a.ID).Done {
-		t.Fatalf("предусловие: a закрыта")
-	}
-	// перенос несделанной задачи под a открывает a
-	x := e.mk(t, "x", nil, nil)
-	if _, err := UpdateTask(e.db, x.ID, UpdateReq{SetParentID: true, ParentID: &a.ID}); err != nil {
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "c3", ParentID: &b.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if e.get(t, a.ID).Done {
-		t.Errorf("перенос несделанной не открыл предка")
+	if !e.get(t, b.ID).Done {
+		t.Errorf("создание ребёнка не должно снимать done родителя")
+	}
+
+	// снятие done ребёнка не трогает родителя
+	if _, err := UpdateTask(e.db, c1.ID, UpdateReq{Done: new(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if !e.get(t, b.ID).Done {
+		t.Errorf("uncheck ребёнка не должен открывать родителя")
 	}
 }
 
@@ -279,7 +236,7 @@ func TestManualParentDone(t *testing.T) {
 
 func TestCrossProjectReparentRepaints(t *testing.T) {
 	e := openTest(t)
-	p2, err := CreateProject(e.db, "Другой", "#8fb56b")
+	p2, err := CreateProject(e.db, "Другой", "#8fb56b", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,54 +323,188 @@ func TestDeleteCascade(t *testing.T) {
 func TestProjectsCRUD(t *testing.T) {
 	e := openTest(t)
 
-	p2, err := CreateProject(e.db, "Второй", "#8fb56b")
+	p2, err := CreateProject(e.db, "Второй", "#8fb56b", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p2.Position != 1 {
 		t.Errorf("позиция второго проекта: %d; ждали 1", p2.Position)
 	}
-	if _, err := CreateProject(e.db, "  ", "#8fb56b"); !errors.Is(err, ErrValidation) {
+	if _, err := CreateProject(e.db, "  ", "#8fb56b", nil); !errors.Is(err, ErrValidation) {
 		t.Errorf("пустое имя: %v", err)
 	}
-	if _, err := CreateProject(e.db, "x", "red"); !errors.Is(err, ErrValidation) {
+	if _, err := CreateProject(e.db, "x", "red", nil); !errors.Is(err, ErrValidation) {
 		t.Errorf("кривой цвет: %v", err)
 	}
 
 	if _, err := UpdateProject(e.db, p2.ID, ProjectUpdate{Name: new("Переименован"), Color: new("#6a9bc9")}); err != nil {
 		t.Fatal(err)
 	}
-	ps, _ := ListProjects(e.db)
-	if len(ps) != 2 || ps[1].Name != "Переименован" || ps[1].Color != "#6a9bc9" {
-		t.Errorf("после rename: %+v", ps)
-	}
 
-	// перестановка p2 на 0
+	// перестановка p2 на 0 в scope корня
 	if _, err := UpdateProject(e.db, p2.ID, ProjectUpdate{Position: new(0)}); err != nil {
 		t.Fatal(err)
 	}
-	ps, _ = ListProjects(e.db)
-	if ps[0].ID != p2.ID || ps[0].Position != 0 || ps[1].Position != 1 {
+	ps, _ := ListProjects(e.db)
+	if ps[0].ID != p2.ID {
 		t.Errorf("после move: %+v", ps)
 	}
 
-	// удаление с задачами
+	// удаление: с задачами — запрещено
 	_ = e.mk(t, "t1", nil, nil)
-	root := e.mk(t, "t2", nil, nil)
-	_ = e.mk(t, "t3", &root.ID, nil)
-	n, err := DeleteProject(e.db, e.pid)
+	if err := DeleteProject(e.db, e.pid); !errors.Is(err, ErrProjectNotEmpty) {
+		t.Errorf("удаление с задачами: %v", err)
+	}
+	// пустой — удаляется
+	if err := DeleteProject(e.db, p2.ID); err != nil {
+		t.Errorf("удаление пустого: %v", err)
+	}
+	if err := DeleteProject(e.db, 9999); !errors.Is(err, ErrNotFound) {
+		t.Errorf("удаление несуществующего: %v", err)
+	}
+}
+
+func TestProjectTree(t *testing.T) {
+	e := openTest(t)
+	child, err := CreateProject(e.db, "Ребёнок", "#8fb56b", &e.pid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 3 {
-		t.Errorf("удалено задач: %d; ждали 3", n)
+	if child.ParentID == nil || *child.ParentID != e.pid || child.Position != 0 {
+		t.Fatalf("вложенный проект: %+v", child)
 	}
-	if _, err := DeleteProject(e.db, 9999); !errors.Is(err, ErrNotFound) {
-		t.Errorf("удаление несуществующего: %v", err)
+	// позиции в scope родителя: второй корень получает 1, не 2
+	root2, err := CreateProject(e.db, "Корень2", "#6a9bc9", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	all, _ := ListTasks(e.db)
-	if len(all) != 0 {
-		t.Errorf("задачи не удалились: %+v", all)
+	if root2.Position != 1 {
+		t.Errorf("позиция корня в своём scope: %d", root2.Position)
+	}
+
+	// цикл: родителя под собственного ребёнка нельзя
+	if _, err := UpdateProject(e.db, e.pid, ProjectUpdate{SetParentID: true, ParentID: &child.ID}); !errors.Is(err, ErrCycle) {
+		t.Errorf("цикл проектов: %v", err)
+	}
+	// удаление с под-проектами запрещено
+	if err := DeleteProject(e.db, e.pid); !errors.Is(err, ErrProjectNotEmpty) {
+		t.Errorf("удаление с под-проектами: %v", err)
+	}
+	// перенос ребёнка в корень
+	if _, err := UpdateProject(e.db, child.ID, ProjectUpdate{SetParentID: true, ParentID: nil}); err != nil {
+		t.Fatal(err)
+	}
+	ps, _ := ListProjects(e.db)
+	for _, p := range ps {
+		if p.ID == child.ID && p.ParentID != nil {
+			t.Errorf("ребёнок не в корне: %+v", p)
+		}
+	}
+}
+
+func TestProjectArchive(t *testing.T) {
+	e := openTest(t)
+	child, err := CreateProject(e.db, "Ребёнок", "#8fb56b", &e.pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// архивация рекурсивна вниз
+	affected, err := UpdateProject(e.db, e.pid, ProjectUpdate{Archived: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(affected) != 2 {
+		t.Errorf("затронуто %d; ждали 2", len(affected))
+	}
+	ps, _ := ListProjects(e.db)
+	for _, p := range ps {
+		if !p.Archived {
+			t.Errorf("не архивирован: %+v", p)
+		}
+	}
+
+	// запреты: создание задачи и проекта в архивном, перенос в архивный
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "x", ProjectID: &e.pid}); !errors.Is(err, ErrArchivedTarget) {
+		t.Errorf("задача в архивный: %v", err)
+	}
+	if _, err := CreateProject(e.db, "x", "#8fb56b", &e.pid); !errors.Is(err, ErrArchivedTarget) {
+		t.Errorf("проект в архивный: %v", err)
+	}
+	other, _ := CreateProject(e.db, "Живой", "#6a9bc9", nil)
+	if _, err := UpdateProject(e.db, other.ID, ProjectUpdate{SetParentID: true, ParentID: &child.ID}); !errors.Is(err, ErrArchivedTarget) {
+		t.Errorf("перенос проекта в архивный: %v", err)
+	}
+	task, _, err := CreateTask(e.db, CreateReq{Title: "жив", ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, task.ID, UpdateReq{SetProjectID: true, ProjectID: &e.pid}); !errors.Is(err, ErrArchivedTarget) {
+		t.Errorf("перенос задачи в архивный: %v", err)
+	}
+
+	// разархивация рекурсивна
+	if _, err := UpdateProject(e.db, e.pid, ProjectUpdate{Archived: new(false)}); err != nil {
+		t.Fatal(err)
+	}
+	ps, _ = ListProjects(e.db)
+	for _, p := range ps {
+		if p.Archived {
+			t.Errorf("остался архивным: %+v", p)
+		}
+	}
+}
+
+func TestTaskProjectTransfer(t *testing.T) {
+	e := openTest(t)
+	p2, err := CreateProject(e.db, "Другой", "#8fb56b", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing, _, err := CreateTask(e.db, CreateReq{Title: "уже там", ProjectID: &p2.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = existing
+	a := e.mk(t, "a", nil, nil)
+	b := e.mk(t, "b", &a.ID, nil)
+	sib := e.mk(t, "sib", nil, nil)
+
+	// перенос поддерева a в корень p2
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetProjectID: true, ProjectID: &p2.ID}); err != nil {
+		t.Fatal(err)
+	}
+	na, nb := e.get(t, a.ID), e.get(t, b.ID)
+	if na.ProjectID != p2.ID || nb.ProjectID != p2.ID {
+		t.Errorf("поддерево не перекрашено: %d %d", na.ProjectID, nb.ProjectID)
+	}
+	if na.ParentID != nil || na.Position != 1 {
+		t.Errorf("a не в конце корней p2: parent=%v pos=%d", na.ParentID, na.Position)
+	}
+	// старые сиблинги уплотнились
+	if ns := e.get(t, sib.ID); ns.Position != 0 {
+		t.Errorf("старый сиблинг: %d", ns.Position)
+	}
+}
+
+func TestDueBeforeScheduledForbidden(t *testing.T) {
+	e := openTest(t)
+	// create: дедлайн раньше плана — 422
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "x", ProjectID: &e.pid, ScheduledOn: new("2026-07-25"), DueOn: new("2026-07-24")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("create: %v", err)
+	}
+	a := e.mk(t, "a", nil, new("2026-07-25"))
+	// patch: дедлайн раньше плана
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: new("2026-07-24")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("patch due: %v", err)
+	}
+	// дедлайн в тот же день — ок
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: new("2026-07-25")}); err != nil {
+		t.Errorf("равные даты: %v", err)
+	}
+	// теперь перенос плана позже дедлайна — 422
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2026-07-26")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("patch scheduled: %v", err)
 	}
 }
 
