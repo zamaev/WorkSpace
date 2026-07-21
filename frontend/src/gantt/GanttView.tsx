@@ -1,0 +1,430 @@
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Link } from "react-router-dom";
+import { MLabel, SBar } from "../components/ui";
+import { useData } from "../data/DataProvider";
+import { childrenOf, projectUndone, rootTasks, sortedProjects } from "../data/selectors";
+import type { Project, Task } from "../data/types";
+import { addDays, todayISO } from "../lib/dates";
+import { DAY_W, NAME_W, buildScale, dayIndex, monthSegments, saturdayOffset, xOf, type Scale } from "./timeline";
+
+const OPEN_KEY = "workspace-gantt-open";
+const PROJECT_ROW_H = 40;
+const TASK_ROW_H = 30;
+const HEAD_H = 44;
+
+function loadOpen(): Set<number> {
+  try {
+    const raw = localStorage.getItem(OPEN_KEY);
+    if (raw) return new Set(JSON.parse(raw) as number[]);
+  } catch {
+    // битый localStorage — стартуем со свёрнутыми проектами
+  }
+  return new Set();
+}
+
+// Активное перетаскивание: превью считается от исходных дат + delta дней.
+type Drag = {
+  kind: "project" | "task";
+  id: number;
+  mode: "move" | "left" | "right" | "single";
+  originX: number;
+  delta: number;
+};
+
+// Итоговые границы фигуры с учётом drag-превью и клампов resize.
+function applyDrag(start: string | null, end: string | null, drag: Drag | null, kind: string, id: number) {
+  if (!drag || drag.kind !== kind || drag.id !== id || drag.delta === 0) return { start, end };
+  const d = drag.delta;
+  switch (drag.mode) {
+    case "move":
+      return { start: start && addDays(start, d), end: end && addDays(end, d) };
+    case "left": {
+      let ns = start && addDays(start, d);
+      if (ns && end && ns > end) ns = end;
+      return { start: ns, end };
+    }
+    case "right": {
+      let ne = end && addDays(end, d);
+      if (ne && start && ne < start) ne = start;
+      return { start, end: ne };
+    }
+    case "single":
+      return { start: start && addDays(start, d), end: end && addDays(end, d) };
+  }
+}
+
+export function GanttView() {
+  const { tasks, projects, loading, offline, retry, patch, patchProject } = useData();
+  const today = todayISO();
+  const [open, setOpen] = useState<Set<number>>(loadOpen);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const list = sortedProjects(projects);
+
+  const scale = useMemo(() => {
+    const dates: string[] = [];
+    for (const p of projects.values()) {
+      if (p.startOn) dates.push(p.startOn);
+      if (p.dueOn) dates.push(p.dueOn);
+    }
+    for (const t of tasks.values()) {
+      if (t.scheduledOn) dates.push(t.scheduledOn);
+      if (t.dueOn) dates.push(t.dueOn);
+    }
+    return buildScale(dates, today);
+  }, [projects, tasks, today]);
+
+  // стартовая прокрутка: сегодня — в первой трети окна
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || loading) return;
+    el.scrollLeft = Math.max(0, NAME_W + xOf(scale, today) - el.clientWidth / 3);
+    // прокручиваем один раз после загрузки; scale меняется при drag — не дёргаем
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // глобальные обработчики активного перетаскивания
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e: PointerEvent) => {
+      const delta = Math.round((e.clientX - drag.originX) / DAY_W);
+      setDrag((d) => (d && delta !== d.delta ? { ...d, delta } : d));
+    };
+    const onUp = () => {
+      commitDrag();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag?.id, drag?.originX, drag?.mode]);
+
+  const commitDrag = () => {
+    setDrag((d) => {
+      if (!d || d.delta === 0) return null;
+      if (d.kind === "project") {
+        const p = projects.get(d.id);
+        if (p) {
+          const next = applyDrag(p.startOn, p.dueOn, d, "project", d.id);
+          if (next.start !== p.startOn || next.end !== p.dueOn) {
+            void patchProject(d.id, { startOn: next.start ?? null, dueOn: next.end ?? null });
+          }
+        }
+      } else {
+        const t = tasks.get(d.id);
+        if (t) {
+          const next = applyDrag(t.scheduledOn, t.dueOn, d, "task", d.id);
+          const p: { scheduledOn?: string | null; dueOn?: string | null } = {};
+          if (next.start !== t.scheduledOn) p.scheduledOn = next.start ?? null;
+          if (next.end !== t.dueOn) p.dueOn = next.end ?? null;
+          if (Object.keys(p).length > 0) void patch(d.id, p);
+        }
+      }
+      return null;
+    });
+  };
+
+  const startDrag =
+    (kind: "project" | "task", id: number, mode: Drag["mode"]) => (e: ReactPointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDrag({ kind, id, mode, originX: e.clientX, delta: 0 });
+    };
+
+  const toggleOpen = (id: number) => {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify([...next]));
+      } catch {
+        // недоступный localStorage — состояние живёт до перезагрузки
+      }
+      return next;
+    });
+  };
+
+  if (loading) {
+    return <p className="text-[13px] text-dim">Загрузка…</p>;
+  }
+  if (offline) {
+    return (
+      <div className="banner">
+        Нет связи с сервером
+        <button type="button" className="seg" onClick={retry}>
+          Повторить
+        </button>
+      </div>
+    );
+  }
+  if (list.length === 0) {
+    return (
+      <div className="panel px-6 py-8 text-center">
+        <p className="text-[14px] font-semibold m-0">Проектов пока нет</p>
+        <p className="text-[13px] text-dim mt-1 mb-0">Создай проект в разделе «Проекты» — он появится на Ганте.</p>
+      </div>
+    );
+  }
+
+  const totalW = scale.days * DAY_W;
+  const satOff = saturdayOffset(scale);
+  const weekendBg = weekendGradient(satOff);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between pb-4">
+        <h1 className="text-[17px] font-semibold m-0">Гант</h1>
+        <button
+          type="button"
+          className="seg"
+          onClick={() => {
+            const el = scrollRef.current;
+            if (el) el.scrollTo({ left: Math.max(0, NAME_W + xOf(scale, today) - el.clientWidth / 3), behavior: "smooth" });
+          }}
+        >
+          Сегодня
+        </button>
+      </div>
+
+      <div className="gantt-scroll" ref={scrollRef}>
+        <div className="g-canvas">
+          {/* шапка: месяцы + числа понедельников */}
+          <div className="g-row g-head" style={{ height: HEAD_H }}>
+            <div className="g-name" style={{ width: NAME_W }}>
+              <MLabel>Проекты</MLabel>
+            </div>
+            <div className="g-track" style={{ width: totalW }}>
+              <div className="whitespace-nowrap">
+                {monthSegments(scale).map((m, i) => (
+                  <span key={i} className="g-month" style={{ width: m.days * DAY_W }}>
+                    {m.label}
+                  </span>
+                ))}
+              </div>
+              <div className="whitespace-nowrap">
+                {Array.from({ length: scale.days }, (_, i) => {
+                  const iso = addDays(scale.start, i);
+                  const isMonday = new Date(iso + "T12:00").getDay() === 1;
+                  return (
+                    <span key={i} className="g-day" style={{ width: DAY_W }}>
+                      {isMonday ? Number(iso.slice(8)) : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {list.map((p) => (
+            <ProjectRows
+              key={p.id}
+              project={p}
+              tasks={tasks}
+              scale={scale}
+              totalW={totalW}
+              weekendBg={weekendBg}
+              open={open.has(p.id)}
+              toggleOpen={() => toggleOpen(p.id)}
+              drag={drag}
+              startDrag={startDrag}
+              undone={projectUndone(tasks, p.id)}
+              onSetDates={() => void patchProject(p.id, { startOn: today, dueOn: addDays(today, 13) })}
+            />
+          ))}
+
+          {/* линия сегодня — поверх всех строк */}
+          <div className="g-today" style={{ left: NAME_W + xOf(scale, today) + DAY_W / 2 - 1 }} />
+        </div>
+      </div>
+      <p className="pt-3 text-[12px] text-dim">
+        Полосу можно двигать целиком, края — тянуть; ромб — одна из двух дат. Даты задач назначаются в «Проектах» и
+        «Неделе», здесь — двигаются.
+      </p>
+    </div>
+  );
+}
+
+// повторяющийся градиент подсветки выходных: период 7 дней от начала шкалы
+function weekendGradient(satOff: number): string {
+  const c = "color-mix(in srgb, var(--text) 3%, transparent)";
+  const d = DAY_W;
+  const period = 7 * d;
+  if (satOff <= 5) {
+    const a = satOff * d;
+    const b = (satOff + 2) * d;
+    return `repeating-linear-gradient(90deg, transparent 0, transparent ${a}px, ${c} ${a}px, ${c} ${b}px, transparent ${b}px, transparent ${period}px)`;
+  }
+  // суббота — последний день периода, воскресенье переносится в начало
+  return `repeating-linear-gradient(90deg, ${c} 0, ${c} ${d}px, transparent ${d}px, transparent ${6 * d}px, ${c} ${6 * d}px, ${c} ${period}px)`;
+}
+
+function ProjectRows({
+  project,
+  tasks,
+  scale,
+  totalW,
+  weekendBg,
+  open,
+  toggleOpen,
+  drag,
+  startDrag,
+  undone,
+  onSetDates,
+}: {
+  project: Project;
+  tasks: Map<number, Task>;
+  scale: Scale;
+  totalW: number;
+  weekendBg: string;
+  open: boolean;
+  toggleOpen: () => void;
+  drag: Drag | null;
+  startDrag: (kind: "project" | "task", id: number, mode: Drag["mode"]) => (e: ReactPointerEvent) => void;
+  undone: number;
+  onSetDates: () => void;
+}) {
+  const { start, end } = applyDrag(project.startOn, project.dueOn, drag, "project", project.id);
+
+  const flat: { task: Task; depth: number }[] = [];
+  if (open) {
+    const walk = (parentId: number | null, depth: number) => {
+      const children = parentId === null ? rootTasks(tasks, project.id) : childrenOf(tasks, parentId);
+      for (const t of children) {
+        flat.push({ task: t, depth });
+        walk(t.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+  }
+
+  return (
+    <>
+      <div className="g-row" style={{ height: PROJECT_ROW_H }}>
+        <div className="g-name" style={{ width: NAME_W }}>
+          <button type="button" className="chevron" onClick={toggleOpen} aria-label={open ? "Свернуть" : "Развернуть"}>
+            <span className={open ? "inline-block rotate-90" : "inline-block"}>▶</span>
+          </button>
+          <SBar color={project.color} />
+          <span className="flex-1 min-w-0 truncate font-semibold text-[13.5px]">{project.name}</span>
+          {undone > 0 && <span className="mmeta">{undone}</span>}
+        </div>
+        <div className="g-track" style={{ width: totalW }}>
+          <div className="g-wknd" style={{ backgroundImage: weekendBg }} />
+          <Figure
+            kind="project"
+            id={project.id}
+            start={start}
+            end={end}
+            color={project.color}
+            dim={false}
+            startDrag={startDrag}
+            onSetDates={onSetDates}
+            setDatesX={xOf(scale, todayISO())}
+            scale={scale}
+          />
+        </div>
+      </div>
+      {flat.map(({ task, depth }) => {
+        const td = applyDrag(task.scheduledOn, task.dueOn, drag, "task", task.id);
+        return (
+          <div className="g-row" style={{ height: TASK_ROW_H }} key={task.id}>
+            <div className="g-name" style={{ width: NAME_W, paddingLeft: 34 + depth * 16 }}>
+              <Link
+                to={`/projects/${project.id}?focus=${task.id}`}
+                className={`flex-1 min-w-0 truncate text-[12.5px] ${task.done ? "text-dim line-through" : ""}`}
+                title={`${task.title} — открыть в дереве`}
+              >
+                {task.title}
+              </Link>
+            </div>
+            <div className="g-track" style={{ width: totalW }}>
+              <div className="g-wknd" style={{ backgroundImage: weekendBg }} />
+              <Figure
+                kind="task"
+                id={task.id}
+                start={td.start}
+                end={td.end}
+                color={project.color}
+                dim={task.done}
+                startDrag={startDrag}
+                scale={scale}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// Фигура на шкале: полоса (обе даты), ромб (одна), кнопка «＋ даты» (проект без дат).
+function Figure({
+  kind,
+  id,
+  start,
+  end,
+  color,
+  dim,
+  startDrag,
+  onSetDates,
+  setDatesX,
+  scale,
+}: {
+  kind: "project" | "task";
+  id: number;
+  start: string | null;
+  end: string | null;
+  color: string;
+  dim: boolean;
+  startDrag: (kind: "project" | "task", id: number, mode: Drag["mode"]) => (e: ReactPointerEvent) => void;
+  onSetDates?: () => void;
+  setDatesX?: number;
+  scale: Scale;
+}) {
+  const dimStyle = dim ? { opacity: 0.4 } : undefined;
+  if (start && end) {
+    const left = xOf(scale, start) + 2;
+    const width = (dayIndex(scale, end) - dayIndex(scale, start) + 1) * DAY_W - 4;
+    return (
+      <div
+        className={`g-bar ${kind === "task" ? "g-bar-task" : ""}`}
+        style={{
+          left,
+          width,
+          background: `color-mix(in srgb, ${color} ${kind === "project" ? 34 : 46}%, transparent)`,
+          border: `1px solid ${color}`,
+          ...dimStyle,
+        }}
+        title={`${start} → ${end}`}
+        onPointerDown={startDrag(kind, id, "move")}
+      >
+        <span className="g-edge" style={{ left: -4 }} onPointerDown={startDrag(kind, id, "left")} />
+        <span className="g-edge" style={{ right: -4 }} onPointerDown={startDrag(kind, id, "right")} />
+      </div>
+    );
+  }
+  const single = start ?? end;
+  if (single) {
+    return (
+      <span
+        className={`g-diamond ${kind === "task" ? "g-diamond-task" : ""}`}
+        style={{ left: xOf(scale, single) + DAY_W / 2, background: color, ...dimStyle }}
+        title={single}
+        onPointerDown={startDrag(kind, id, "single")}
+      />
+    );
+  }
+  if (kind === "project" && onSetDates) {
+    return (
+      <button type="button" className="seg g-setdates !text-[11px]" style={{ left: (setDatesX ?? 0) + 4 }} onClick={onSetDates}>
+        ＋ даты
+      </button>
+    );
+  }
+  return null;
+}

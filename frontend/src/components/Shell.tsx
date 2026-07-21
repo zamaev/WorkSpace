@@ -29,6 +29,7 @@ export function Shell({ children }: { children: ReactNode }) {
       if (typingTarget(e) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "1") navigate("/projects");
       if (e.key === "2") navigate("/week");
+      if (e.key === "3") navigate("/gantt");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -50,6 +51,9 @@ export function Shell({ children }: { children: ReactNode }) {
           </NavLink>
           <NavLink to="/week" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
             Неделя
+          </NavLink>
+          <NavLink to="/gantt" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+            Гант
           </NavLink>
         </nav>
         <button
