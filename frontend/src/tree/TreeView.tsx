@@ -18,8 +18,16 @@ function loadClosed(): Set<number> {
   return new Set();
 }
 
-// Дерево задач одного проекта (правая панель раздела «Проекты»).
-export function TreeView({ project }: { project: Project }) {
+// Дерево задач одного проекта (центральная панель раздела «Проекты»).
+export function TreeView({
+  project,
+  selectedId,
+  onSelect,
+}: {
+  project: Project;
+  selectedId: number | null;
+  onSelect: (id: number | null) => void;
+}) {
   const { tasks, create } = useData();
   // храним свёрнутые (а не раскрытые): новые узлы по умолчанию раскрыты
   const [closed, setClosed] = useState<Set<number>>(loadClosed);
@@ -57,12 +65,13 @@ export function TreeView({ project }: { project: Project }) {
       return next;
     });
     setFlashId(id);
+    onSelect(id);
     const timer = setTimeout(() => {
       setFlashId(null);
       setParams({}, { replace: true });
     }, 2200);
     return () => clearTimeout(timer);
-  }, [params, tasks, setParams]);
+  }, [params, tasks, setParams, onSelect]);
 
   const roots = rootTasks(tasks, project.id);
 
@@ -81,10 +90,13 @@ export function TreeView({ project }: { project: Project }) {
           isOpen={isOpen}
           toggleOpen={toggleOpen}
           flashId={flashId}
+          selectedId={selectedId}
+          onSelect={(id) => onSelect(id)}
         />
       ))}
       <NewTaskInput
         depth={0}
+        color={project.color}
         placeholder="Новая задача…"
         onSubmit={async (title) => void (await create({ title, projectId: project.id }))}
       />

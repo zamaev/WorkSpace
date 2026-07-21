@@ -54,15 +54,22 @@ export function DateMenu({
         <span>Завтра</span>
         <span className="mmeta">{fmtDayChip(addDays(today, 1))}</span>
       </button>
-      <div className="mlabel mt-2 mb-1">Эта неделя</div>
+      {restOfWeek(today).length > 0 && (
+        <>
+          <div className="mlabel mt-2 mb-1">Эта неделя</div>
+          <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+            {restOfWeek(today).map((d) => (
+              <button key={d} type="button" className={`chip ${d === current ? "chip-accent" : ""}`} onClick={() => pick(d)}>
+                {fmtDayChip(d)}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="mlabel mt-2 mb-1">Следующая</div>
       <div className="flex flex-wrap gap-1.5 px-1 pb-1">
-        {weekDays(mondayOf(today)).map((d) => (
-          <button
-            key={d}
-            type="button"
-            className={`chip ${d === current ? "chip-accent" : ""} ${d === today ? "!border-accent" : ""}`}
-            onClick={() => pick(d)}
-          >
+        {weekDays(addDays(mondayOf(today), 7)).map((d) => (
+          <button key={d} type="button" className={`chip ${d === current ? "chip-accent" : ""}`} onClick={() => pick(d)}>
             {fmtDayChip(d)}
           </button>
         ))}
@@ -145,4 +152,12 @@ export function DateMenu({
       )}
     </div>
   );
+}
+
+// дни текущей недели, начиная с послезавтра (сегодня/завтра уже есть выше)
+function restOfWeek(today: string): string[] {
+  const out: string[] = [];
+  const end = addDays(mondayOf(today), 6);
+  for (let d = addDays(today, 2); d <= end; d = addDays(d, 1)) out.push(d);
+  return out;
 }

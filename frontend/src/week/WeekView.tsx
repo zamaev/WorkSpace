@@ -9,6 +9,7 @@ import { plural } from "../lib/plural";
 import type { Task } from "../data/types";
 import type { ReactNode } from "react";
 import { DayColumn } from "./DayColumn";
+import { TaskModal } from "../components/TaskDetails";
 
 // Строка плашки просрочки; действия приходят снаружи (у дедлайнов и плана они разные).
 function OverdueRow({ task, dateIso, children }: { task: Task; dateIso: string; children: ReactNode }) {
@@ -92,6 +93,7 @@ export function WeekView() {
       return !v;
     });
   };
+  const [modalTask, setModalTask] = useState<number | null>(null);
   const [twoWeeks, setTwoWeeks] = useState(() => {
     try {
       return localStorage.getItem(TWO_WEEKS_KEY) === "1";
@@ -218,16 +220,17 @@ export function WeekView() {
 
       <div className="week-grid" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
         {days.map((d) => (
-          <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} />
+          <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} onOpen={setModalTask} />
         ))}
       </div>
       {twoWeeks && (
         <div className="week-grid pt-3" style={{ gridTemplateColumns: `repeat(${nextDays.length}, minmax(0, 1fr))` }}>
           {nextDays.map((d) => (
-            <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} />
+            <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} onOpen={setModalTask} />
           ))}
         </div>
       )}
+      {modalTask !== null && <TaskModal taskId={modalTask} onClose={() => setModalTask(null)} />}
       {empty && <p className="pt-4 text-[13px] text-dim text-center">На этой неделе пусто — перетащи задачи из дерева или добавь прямо в день.</p>}
     </div>
   );

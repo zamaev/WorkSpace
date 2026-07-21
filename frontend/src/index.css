@@ -398,6 +398,45 @@
     width: max-content;
   }
 
+  /* ── инспектор задачи ── */
+
+  .inspector {
+    width: 300px;
+    flex: none;
+    position: sticky;
+    top: 14px;
+  }
+  .tree-row-sel {
+    background: var(--asoft);
+  }
+  .tree-row-sel:hover {
+    background: var(--asoft);
+  }
+
+  /* ── модал (sheet, десктоп-вариант из space) ── */
+
+  .sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .sheet {
+    position: fixed;
+    left: 50%;
+    top: 12vh;
+    transform: translateX(-50%);
+    z-index: 61;
+    width: 520px;
+    max-height: 76vh;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 20px 22px 22px;
+    box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.55);
+  }
+
   /* ── маркёры цвета проекта (идиома space: цвет — маркёр, не заливка) ── */
 
   .sbar {

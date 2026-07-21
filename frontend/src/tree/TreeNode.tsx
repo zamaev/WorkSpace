@@ -5,7 +5,6 @@ import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
 import type { Task } from "../data/types";
 import { fmtDayChip, todayISO } from "../lib/dates";
-import { plural } from "../lib/plural";
 import { getDragTask, hasDragTask, setDragTask } from "./dnd";
 
 type DropZone = "before" | "into" | "after" | null;
@@ -17,6 +16,8 @@ export function TreeNode({
   isOpen,
   toggleOpen,
   flashId,
+  selectedId,
+  onSelect,
 }: {
   task: Task;
   depth: number;
@@ -24,13 +25,14 @@ export function TreeNode({
   isOpen: (id: number) => boolean;
   toggleOpen: (id: number) => void;
   flashId: number | null;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
 }) {
-  const { tasks, create, patch, remove } = useData();
+  const { tasks, create, patch } = useData();
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dateMenu, setDateMenu] = useState(false);
   const [dueMenu, setDueMenu] = useState(false);
-  const [detail, setDetail] = useState(false);
   const [zone, setZone] = useState<DropZone>(null);
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -82,25 +84,18 @@ export function TreeNode({
     void patch(dragId, { parentId: task.parentId, position: at });
   };
 
-  const onDelete = () => {
-    const count = subtreeIds(tasks, task.id).length;
-    const msg =
-      count > 1
-        ? `Удалить «${task.title}» вместе с вложенными — всего ${plural(count, ["задача", "задачи", "задач"])}?`
-        : `Удалить «${task.title}»?`;
-    if (window.confirm(msg)) void remove(task.id);
-  };
-
   const zoneCls =
     zone === "into" ? "drop-into" : zone === "before" ? "drop-before" : zone === "after" ? "drop-after" : "";
+  const selCls = selectedId === task.id ? "tree-row-sel" : "";
 
   return (
     <div>
       <div
         ref={rowRef}
-        className={`tree-row ${zoneCls} ${flashId === task.id ? "bg-asoft" : ""}`}
+        className={`tree-row ${zoneCls} ${selCls} ${flashId === task.id ? "bg-asoft" : ""}`}
         style={{ marginLeft: depth * 22 }}
         draggable={!renaming}
+        onClick={() => onSelect(task.id)}
         onDragStart={(e) => setDragTask(e, task.id)}
         onDragOver={(e) => {
           if (!hasDragTask(e)) return;
@@ -115,14 +110,20 @@ export function TreeNode({
         <button
           type="button"
           className={`chevron ${open ? "chevron-open" : ""} ${children.length === 0 ? "chevron-empty" : ""}`}
-          onClick={() => toggleOpen(task.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleOpen(task.id);
+          }}
           aria-label={open ? "Свернуть" : "Развернуть"}
           tabIndex={children.length === 0 ? -1 : 0}
         >
           ▶
         </button>
         <SBar color={color} />
-        <Check done={task.done} label={task.done ? "Снять отметку" : "Отметить сделанной"} onClick={() => void patch(task.id, { done: !task.done })} />
+        <Check done={task.done} label={task.done ? "Снять отметку" : "Отметить сделанной"} onClick={(e) => {
+          e.stopPropagation();
+          void patch(task.id, { done: !task.done });
+        }} />
         {renaming ? (
           <RenameInput
             initial={task.title}
@@ -132,14 +133,16 @@ export function TreeNode({
             }}
           />
         ) : (
-          <button
-            type="button"
+          <span
             className={`flex-1 min-w-0 text-left text-[13.5px] truncate ${depth === 0 ? "font-semibold" : ""} ${task.done ? "text-dim line-through" : ""}`}
-            onClick={() => setRenaming(true)}
-            title="Переименовать"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setRenaming(true);
+            }}
+            title="Двойной клик — переименовать"
           >
             {task.title}
-          </button>
+          </span>
         )}
         {stats.total > 0 && (
           <span className="mmeta whitespace-nowrap" title="Сделано из прямых подзадач">
@@ -151,7 +154,10 @@ export function TreeNode({
             <button
               type="button"
               className={`chip ${chipOverdue ? "date-chip-over" : "chip-accent"}`}
-              onClick={() => setDateMenu((v) => !v)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDateMenu((v) => !v);
+              }}
               title={chipOverdue ? "Просрочена" : "Изменить дату"}
             >
               {fmtDayChip(task.scheduledOn)}
@@ -173,7 +179,10 @@ export function TreeNode({
             <button
               type="button"
               className={`chip ${dueOverdue ? "date-chip-over" : ""}`}
-              onClick={() => setDueMenu((v) => !v)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDueMenu((v) => !v);
+              }}
               title={dueOverdue ? "Дедлайн сорван" : "Изменить дедлайн"}
             >
               ⚑ {fmtDayChip(task.dueOn)}
@@ -189,57 +198,20 @@ export function TreeNode({
           )}
         </div>
         <div className="row-actions">
-          {!task.scheduledOn && (
-            <button type="button" className="row-btn" title="Назначить дату" onClick={() => setDateMenu((v) => !v)}>
-              ◷
-            </button>
-          )}
-          {!task.dueOn && (
-            <button type="button" className="row-btn" title="Назначить дедлайн" onClick={() => setDueMenu((v) => !v)}>
-              ⚑
-            </button>
-          )}
-          <button
-            type="button"
-            className={`row-btn ${task.description ? "!text-accent" : ""}`}
-            title="Описание"
-            onClick={() => setDetail((v) => !v)}
-          >
-            ≡
-          </button>
           <button
             type="button"
             className="row-btn"
             title="Добавить подзадачу"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setAdding(true);
               if (!open) toggleOpen(task.id);
             }}
           >
             ＋
           </button>
-          <button type="button" className="row-btn row-btn-danger" title="Удалить" onClick={onDelete}>
-            ✕
-          </button>
         </div>
       </div>
-
-      {detail && (
-        <div style={{ marginLeft: depth * 22 + 54 }} className="pb-2 pr-4">
-          <textarea
-            className="ghost-input border border-line rounded-[10px] px-3 py-2 text-[13px] min-h-[64px] resize-y"
-            name="task-description"
-            aria-label="Описание задачи"
-            placeholder="Описание…"
-            defaultValue={task.description}
-            autoFocus
-            onBlur={(e) => {
-              const v = e.target.value;
-              if (v !== task.description) void patch(task.id, { description: v });
-            }}
-          />
-        </div>
-      )}
 
       {open &&
         children.map((c) => (
@@ -251,12 +223,15 @@ export function TreeNode({
             isOpen={isOpen}
             toggleOpen={toggleOpen}
             flashId={flashId}
+            selectedId={selectedId}
+            onSelect={onSelect}
           />
         ))}
 
       {open && adding && (
         <NewTaskInput
           depth={depth + 1}
+          color={color}
           onSubmit={async (title) => {
             await create({ title, parentId: task.id });
           }}
@@ -276,6 +251,7 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
       aria-label="Название задачи"
       value={value}
       autoFocus
+      onClick={(e) => e.stopPropagation()}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => onDone(value.trim())}
       onKeyDown={(e) => {
@@ -286,14 +262,17 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
   );
 }
 
-// Инпут новой задачи: Enter создаёт и оставляет фокус для следующей.
+// Инпут новой задачи: та же геометрия, что у настоящей строки (полоска
+// цвета на месте) — после Enter ничего не смещается.
 export function NewTaskInput({
   depth,
+  color,
   placeholder = "Новая задача…",
   onSubmit,
   onClose,
 }: {
   depth: number;
+  color: string;
   placeholder?: string;
   onSubmit: (title: string) => Promise<void>;
   onClose?: () => void;
@@ -303,6 +282,7 @@ export function NewTaskInput({
   return (
     <div className="tree-row" style={{ marginLeft: depth * 22 }}>
       <span className="chevron chevron-empty">▶</span>
+      <SBar color={color} />
       <span className="check opacity-40" aria-hidden="true" />
       <input
         className="ghost-input flex-1 text-[13.5px]"
