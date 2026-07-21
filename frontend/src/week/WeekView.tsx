@@ -1,0 +1,127 @@
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { MLabel } from "../components/ui";
+import { useData } from "../data/DataProvider";
+import { breadcrumb, overdue } from "../data/selectors";
+import { addDays, fmtDayChip, fmtWeekRange, mondayOf, todayISO, weekDays } from "../lib/dates";
+import { plural } from "../lib/plural";
+import { DayColumn } from "./DayColumn";
+
+const OVERDUE_KEY = "workspace-overdue-collapsed";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function WeekView() {
+  const { tasks, loading, offline, retry, patch } = useData();
+  const { date } = useParams();
+  const navigate = useNavigate();
+  const today = todayISO();
+
+  const anchor = date && DATE_RE.test(date) ? date : today;
+  const monday = mondayOf(anchor);
+  const currentWeek = monday === mondayOf(today);
+
+  const [overdueCollapsed, setOverdueCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(OVERDUE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "t" || e.key === "T" || e.key === "е" || e.key === "Е") navigate("/week");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
+  if (loading) {
+    return <p className="text-[13px] text-dim">Загрузка…</p>;
+  }
+  if (offline) {
+    return (
+      <div className="banner">
+        Нет связи с сервером
+        <button type="button" className="seg" onClick={retry}>
+          Повторить
+        </button>
+      </div>
+    );
+  }
+
+  const late = overdue(tasks, today);
+  const days = weekDays(monday);
+  const empty = days.every((d) => ![...tasks.values()].some((t) => t.scheduledOn === d));
+
+  const toggleOverdue = () => {
+    setOverdueCollapsed((v) => {
+      try {
+        localStorage.setItem(OVERDUE_KEY, v ? "0" : "1");
+      } catch {
+        // приватный режим — состояние не переживёт перезагрузку
+      }
+      return !v;
+    });
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between pb-4">
+        <h1 className="text-[17px] font-semibold m-0">{fmtWeekRange(monday)}</h1>
+        <div className="flex gap-2">
+          <button type="button" className="icon-btn" onClick={() => navigate(`/week/${addDays(monday, -7)}`)} aria-label="Предыдущая неделя">
+            ◂
+          </button>
+          <button type="button" className={`seg ${currentWeek ? "seg-on" : ""}`} onClick={() => navigate("/week")}>
+            Сегодня
+          </button>
+          <button type="button" className="icon-btn" onClick={() => navigate(`/week/${addDays(monday, 7)}`)} aria-label="Следующая неделя">
+            ▸
+          </button>
+        </div>
+      </div>
+
+      {currentWeek && late.length > 0 && (
+        <div className="panel px-4 py-3 mb-4 border-over/40">
+          <button type="button" className="flex w-full items-center justify-between" onClick={toggleOverdue}>
+            <MLabel className="!opacity-100 !text-over">
+              Просрочено · {plural(late.length, ["задача", "задачи", "задач"])}
+            </MLabel>
+            <span className="mmeta">{overdueCollapsed ? "развернуть" : "свернуть"}</span>
+          </button>
+          {!overdueCollapsed && (
+            <div className="pt-2">
+              {late.map((t) => {
+                const crumb = breadcrumb(tasks, t.id);
+                return (
+                  <div key={t.id} className="flex items-center gap-3 py-1.5 border-b border-line last:border-b-0">
+                    <span className="mmeta !text-over whitespace-nowrap">{fmtDayChip(t.scheduledOn!)}</span>
+                    <span className="text-[13px] flex-1 min-w-0 truncate">{t.title}</span>
+                    {crumb && <span className="crumb max-w-[220px]">{crumb}</span>}
+                    <button type="button" className="seg" onClick={() => void patch(t.id, { scheduledOn: today })}>
+                      на сегодня
+                    </button>
+                    <button type="button" className="seg" onClick={() => void patch(t.id, { scheduledOn: null })}>
+                      снять дату
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="week-grid">
+        {days.map((d) => (
+          <DayColumn key={d} day={d} />
+        ))}
+      </div>
+      {empty && <p className="pt-4 text-[13px] text-dim text-center">На этой неделе пусто — перетащи задачи из дерева или добавь прямо в день.</p>}
+    </div>
+  );
+}
