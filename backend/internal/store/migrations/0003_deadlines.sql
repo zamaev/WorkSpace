@@ -1,0 +1,3 @@
+ALTER TABLE tasks ADD COLUMN due_on TEXT;
+ALTER TABLE projects ADD COLUMN start_on TEXT;
+ALTER TABLE projects ADD COLUMN due_on TEXT;

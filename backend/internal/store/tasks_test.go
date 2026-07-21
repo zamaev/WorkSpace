@@ -416,3 +416,58 @@ func TestProjectsCRUD(t *testing.T) {
 		t.Errorf("задачи не удалились: %+v", all)
 	}
 }
+
+func TestTaskDueOn(t *testing.T) {
+	e := openTest(t)
+	a := e.mk(t, "a", nil, nil)
+
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: new("2026-07-25")}); err != nil {
+		t.Fatalf("установка дедлайна: %v", err)
+	}
+	if na := e.get(t, a.ID); na.DueOn == nil || *na.DueOn != "2026-07-25" {
+		t.Errorf("дедлайн не установился: %v", na.DueOn)
+	}
+	// дедлайн не трогает scheduled_on
+	if na := e.get(t, a.ID); na.ScheduledOn != nil {
+		t.Errorf("дедлайн задел план: %v", na.ScheduledOn)
+	}
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: nil}); err != nil {
+		t.Fatalf("снятие дедлайна: %v", err)
+	}
+	if na := e.get(t, a.ID); na.DueOn != nil {
+		t.Errorf("дедлайн не снялся: %v", na.DueOn)
+	}
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: new("2026-99-01")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("битый дедлайн: %v", err)
+	}
+
+	// создание сразу с дедлайном
+	b, _, err := CreateTask(e.db, CreateReq{Title: "b", ProjectID: &e.pid, DueOn: new("2026-08-01")})
+	if err != nil || b.DueOn == nil || *b.DueOn != "2026-08-01" {
+		t.Errorf("создание с дедлайном: %v %v", err, b.DueOn)
+	}
+}
+
+func TestProjectDates(t *testing.T) {
+	e := openTest(t)
+
+	if _, err := UpdateProject(e.db, e.pid, ProjectUpdate{SetStartOn: true, StartOn: new("2026-07-20"), SetDueOn: true, DueOn: new("2026-08-10")}); err != nil {
+		t.Fatalf("даты проекта: %v", err)
+	}
+	ps, _ := ListProjects(e.db)
+	if ps[0].StartOn == nil || *ps[0].StartOn != "2026-07-20" || ps[0].DueOn == nil || *ps[0].DueOn != "2026-08-10" {
+		t.Errorf("даты не сохранились: %+v", ps[0])
+	}
+
+	// старт позже дедлайна — 422
+	if _, err := UpdateProject(e.db, e.pid, ProjectUpdate{SetStartOn: true, StartOn: new("2026-09-01")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("start > due: ждали ErrValidation, получили %v", err)
+	}
+	// снятие дедлайна освобождает от проверки
+	if _, err := UpdateProject(e.db, e.pid, ProjectUpdate{SetDueOn: true, DueOn: nil}); err != nil {
+		t.Fatalf("снятие дедлайна: %v", err)
+	}
+	if _, err := UpdateProject(e.db, e.pid, ProjectUpdate{SetStartOn: true, StartOn: new("2026-09-01")}); err != nil {
+		t.Errorf("start без due: %v", err)
+	}
+}
