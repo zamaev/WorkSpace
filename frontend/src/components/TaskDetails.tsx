@@ -4,7 +4,7 @@ import { useData } from "../data/DataProvider";
 import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { plural } from "../lib/plural";
-import { Check, MLabel, SDot, TrashIcon } from "./ui";
+import { AvatarDot, Check, MLabel, SDot, TrashIcon } from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
 import { DatePicker } from "./DatePicker";
 
@@ -18,10 +18,11 @@ export function TaskDetails({
   variant: "panel" | "modal";
   onClose: () => void;
 }) {
-  const { tasks, projects, patch, remove } = useData();
+  const { tasks, projects, types, people, patch, remove, createType } = useData();
   const task = tasks.get(taskId);
   const [title, setTitle] = useState(task?.title ?? "");
-  const [picker, setPicker] = useState<"plan" | "due" | null>(null);
+  const [picker, setPicker] = useState<"plan" | "due" | "type" | "assignee" | null>(null);
+  const [newType, setNewType] = useState("");
   const descRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -126,6 +127,121 @@ export function TaskDetails({
               onPick={(iso) => void patch(task.id, { dueOn: iso })}
               onClose={() => setPicker(null)}
             />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <MLabel className="pb-1.5">Тип и исполнитель</MLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={`chip ${picker === "type" ? "chip-accent-border" : task.typeId !== null ? "chip-accent" : ""}`}
+            onClick={() => setPicker((v) => (v === "type" ? null : "type"))}
+            title="Тип задачи"
+          >
+            {task.typeId !== null ? (types.get(task.typeId)?.name ?? "тип") : "＋ тип"}
+          </button>
+          <button
+            type="button"
+            className={`chip ${picker === "assignee" ? "chip-accent-border" : ""} flex items-center gap-1.5`}
+            onClick={() => setPicker((v) => (v === "assignee" ? null : "assignee"))}
+            title="Исполнитель (пусто — делаю я)"
+          >
+            {task.assigneeId !== null && people.get(task.assigneeId) ? (
+              <>
+                <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={15} />
+                {people.get(task.assigneeId)!.name}
+              </>
+            ) : (
+              "я"
+            )}
+          </button>
+        </div>
+        {picker === "type" && (
+          <div className="pt-2 flex flex-col gap-1">
+            {[...types.values()]
+              .sort((a, b) => a.position - b.position || a.id - b.id)
+              .map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="pop-item"
+                  onClick={() => {
+                    void patch(task.id, { typeId: t.id });
+                    setPicker(null);
+                  }}
+                >
+                  <span>{t.name}</span>
+                  {task.typeId === t.id && <span className="mmeta">✓</span>}
+                </button>
+              ))}
+            <input
+              className="ghost-input text-[13px] px-2.5 py-1.5"
+              name="new-type"
+              aria-label="Новый тип"
+              placeholder="＋ новый тип…"
+              value={newType}
+              onChange={(e) => setNewType(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter" && newType.trim()) {
+                  const t = await createType(newType.trim());
+                  if (t) {
+                    void patch(task.id, { typeId: t.id });
+                    setNewType("");
+                    setPicker(null);
+                  }
+                }
+                if (e.key === "Escape") setNewType("");
+              }}
+            />
+            {task.typeId !== null && (
+              <button
+                type="button"
+                className="pop-item !text-over"
+                onClick={() => {
+                  void patch(task.id, { typeId: null });
+                  setPicker(null);
+                }}
+              >
+                убрать тип
+              </button>
+            )}
+          </div>
+        )}
+        {picker === "assignee" && (
+          <div className="pt-2 flex flex-col gap-1">
+            <button
+              type="button"
+              className="pop-item"
+              onClick={() => {
+                void patch(task.id, { assigneeId: null });
+                setPicker(null);
+              }}
+            >
+              <span>я (без исполнителя)</span>
+              {task.assigneeId === null && <span className="mmeta">✓</span>}
+            </button>
+            {[...people.values()]
+              .sort((a, b) => a.position - b.position || a.id - b.id)
+              .map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="pop-item"
+                  onClick={() => {
+                    void patch(task.id, { assigneeId: p.id });
+                    setPicker(null);
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <AvatarDot name={p.name} color={p.color} size={16} />
+                    {p.name}
+                  </span>
+                  {task.assigneeId === p.id && <span className="mmeta">✓</span>}
+                </button>
+              ))}
+            {people.size === 0 && <p className="text-[12px] text-dim px-2.5 m-0">Добавь людей в разделе «Команда».</p>}
           </div>
         )}
       </div>

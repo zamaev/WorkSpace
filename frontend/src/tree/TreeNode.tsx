@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check, SBar } from "../components/ui";
+import { AvatarDot, Check, SBar } from "../components/ui";
 import { DatePickerPopover } from "../components/DatePicker";
 import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
@@ -28,7 +28,7 @@ export function TreeNode({
   selectedId: number | null;
   onSelect: (id: number) => void;
 }) {
-  const { tasks, create, patch } = useData();
+  const { tasks, types, people, create, patch } = useData();
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dateMenu, setDateMenu] = useState(false);
@@ -143,6 +143,12 @@ export function TreeNode({
           >
             {task.title}
           </span>
+        )}
+        {task.typeId !== null && types.get(task.typeId) && (
+          <span className="mlabel !opacity-70 whitespace-nowrap">{types.get(task.typeId)!.name}</span>
+        )}
+        {task.assigneeId !== null && people.get(task.assigneeId) && (
+          <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={17} />
         )}
         {stats.total > 0 && (
           <span className="mmeta whitespace-nowrap" title="Сделано из прямых подзадач">

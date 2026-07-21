@@ -57,3 +57,27 @@ export function TrashIcon({ size = 13 }: { size?: number }) {
     </svg>
   );
 }
+
+// Инициалы: до двух букв по словам имени («Пётр Иванов» → ПИ).
+export function initials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+// Кружок-инициалы человека.
+export function AvatarDot({ name, color, size = 18 }: { name: string; color: string; size?: number }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full font-semibold text-white flex-none"
+      style={{ width: size, height: size, background: color, fontSize: size * 0.44 }}
+      title={name}
+      aria-label={name}
+    >
+      {initials(name)}
+    </span>
+  );
+}
