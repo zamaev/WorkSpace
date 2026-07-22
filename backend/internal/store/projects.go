@@ -82,7 +82,7 @@ func CreateProject(db *sql.DB, name, color string, parentID *int64) (Project, er
 	}
 
 	var pos int
-	if err := tx.QueryRow(`SELECT COALESCE(MAX(position)+1, 0) FROM projects WHERE parent_id IS ?`, parentID).Scan(&pos); err != nil {
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(position)+1, 0) FROM projects WHERE parent_id IS ? AND deleted_at IS NULL`, parentID).Scan(&pos); err != nil {
 		return Project{}, err
 	}
 	ts := now()
@@ -105,7 +105,7 @@ func CreateProject(db *sql.DB, name, color string, parentID *int64) (Project, er
 }
 
 func ListProjects(db *sql.DB) ([]Project, error) {
-	rows, err := db.Query(projectSelect + ` ORDER BY position, id`)
+	rows, err := db.Query(projectSelect + ` WHERE deleted_at IS NULL ORDER BY position, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -266,19 +266,19 @@ func DeleteProject(db *sql.DB, id int64) error {
 		return err
 	}
 	var n int
-	if err := tx.QueryRow(`SELECT count(*) FROM tasks WHERE project_id = ?`, id).Scan(&n); err != nil {
+	if err := tx.QueryRow(`SELECT count(*) FROM tasks WHERE project_id = ? AND deleted_at IS NULL`, id).Scan(&n); err != nil {
 		return err
 	}
 	if n > 0 {
 		return fmt.Errorf("%w: в проекте есть задачи", ErrProjectNotEmpty)
 	}
-	if err := tx.QueryRow(`SELECT count(*) FROM projects WHERE parent_id = ?`, id).Scan(&n); err != nil {
+	if err := tx.QueryRow(`SELECT count(*) FROM projects WHERE parent_id = ? AND deleted_at IS NULL`, id).Scan(&n); err != nil {
 		return err
 	}
 	if n > 0 {
 		return fmt.Errorf("%w: у проекта есть под-проекты", ErrProjectNotEmpty)
 	}
-	if _, err := tx.Exec(`DELETE FROM projects WHERE id = ?`, id); err != nil {
+	if _, err := tx.Exec(`UPDATE projects SET deleted_at = ? WHERE id = ?`, now(), id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -299,7 +299,7 @@ func scanProjects(rows *sql.Rows) ([]Project, error) {
 }
 
 func loadProject(q querier, id int64) (Project, error) {
-	rows, err := q.Query(projectSelect+` WHERE id = ?`, id)
+	rows, err := q.Query(projectSelect+` WHERE id = ? AND deleted_at IS NULL`, id)
 	if err != nil {
 		return Project{}, err
 	}
@@ -315,7 +315,7 @@ func loadProject(q querier, id int64) (Project, error) {
 }
 
 func projectSiblingIDs(q querier, parent *int64, exclude int64) ([]int64, error) {
-	rows, err := q.Query(`SELECT id FROM projects WHERE parent_id IS ? AND id != ? ORDER BY position, id`, parent, exclude)
+	rows, err := q.Query(`SELECT id FROM projects WHERE parent_id IS ? AND id != ? AND deleted_at IS NULL ORDER BY position, id`, parent, exclude)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func projectSubtreeIDs(q querier, id int64) ([]int64, error) {
 		WITH RECURSIVE sub(id) AS (
 			SELECT id FROM projects WHERE id = ?
 			UNION ALL
-			SELECT p.id FROM projects p JOIN sub ON p.parent_id = sub.id
+			SELECT p.id FROM projects p JOIN sub ON p.parent_id = sub.id WHERE p.deleted_at IS NULL
 		)
 		SELECT id FROM sub`, id)
 	if err != nil {

@@ -12,11 +12,13 @@ import { useTaskFilters } from "../components/TaskFilters";
 import { useData } from "../data/DataProvider";
 import { uiZoom } from "../lib/zoom";
 import { ghostOccurrences } from "../lib/repeat";
+import { collapseSeries } from "./series";
 import {
   childProjects,
   childrenOf,
   projectUndone,
   rootTasks,
+  subtreeIds,
 } from "../data/selectors";
 import type { Project, Task } from "../data/types";
 import { addDays, todayISO } from "../lib/dates";
@@ -495,7 +497,7 @@ function ProjectRows({
     project.id,
   );
 
-  const flat: { task: Task; depth: number }[] = [];
+  const flatAll: { task: Task; depth: number }[] = [];
   if (open) {
     const walk = (parentId: number | null, depth: number) => {
       const children =
@@ -503,7 +505,7 @@ function ProjectRows({
           ? rootTasks(tasks, project.id)
           : childrenOf(tasks, parentId);
       for (const t of children) {
-        if (taskFilter(t)) flat.push({ task: t, depth });
+        if (taskFilter(t)) flatAll.push({ task: t, depth });
         // потомки проверяются независимо: отфильтрованный родитель не
         // прячет подходящих детей
         walk(t.id, depth + 1);
@@ -511,6 +513,14 @@ function ProjectRows({
     };
     walk(null, 0);
   }
+  // серии повторов — одной строкой на живом носителе; строки и
+  // поддеревья прошлых вхождений скрываются
+  const { rows: seriesRows, hiddenSubtreeRoots } = collapseSeries(flatAll);
+  const hiddenIds = new Set<number>();
+  for (const root of hiddenSubtreeRoots) {
+    for (const tid of subtreeIds(tasks, root)) hiddenIds.add(tid);
+  }
+  const flat = seriesRows.filter(({ task }) => !hiddenIds.has(task.id));
 
   return (
     <>
@@ -554,7 +564,7 @@ function ProjectRows({
           />
         </div>
       </div>
-      {flat.map(({ task, depth: taskDepth }) => {
+      {flat.map(({ task, depth: taskDepth, pastOccurrences }) => {
         const td = applyTaskDrag(
           task.scheduledOn,
           task.endOn,
@@ -601,13 +611,35 @@ function ProjectRows({
                 startDrag={startDrag}
                 scale={scale}
               />
+              {pastOccurrences.map((o) => (
+                <span
+                  key={`p${o.date}`}
+                  className="g-diamond g-diamond-task"
+                  style={{
+                    left: xOf(scale, o.date) + DAY_W / 2,
+                    background: project.color,
+                    opacity: o.done ? 0.35 : 0.8,
+                  }}
+                  title={`прошлое вхождение: ${o.date}`}
+                />
+              ))}
               {task.repeat &&
                 task.scheduledOn &&
-                ghostOccurrences(task, scale.start, minISO(addDays(scale.start, scale.days - 1), addDays(task.scheduledOn, 90))).map((day) => (
+                ghostOccurrences(
+                  task,
+                  scale.start,
+                  minISO(
+                    addDays(scale.start, scale.days - 1),
+                    addDays(task.scheduledOn, 90),
+                  ),
+                ).map((day) => (
                   <span
                     key={day}
                     className="g-ghost"
-                    style={{ left: xOf(scale, day) + DAY_W / 2, color: project.color }}
+                    style={{
+                      left: xOf(scale, day) + DAY_W / 2,
+                      color: project.color,
+                    }}
                     title={`повтор: ${day}`}
                   />
                 ))}

@@ -58,6 +58,7 @@ export function demoTask(p: Partial<Task> = {}): Task {
     position: 0,
     dayPosition: null,
     repeat: null,
+    seriesId: null,
     ...p,
   };
 }

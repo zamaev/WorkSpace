@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildScale, dayAt, dayDiff, dayIndex, monthSegments, saturdayOffset } from "./timeline";
+import {
+  buildScale,
+  dayAt,
+  dayDiff,
+  dayIndex,
+  monthSegments,
+  saturdayOffset,
+} from "./timeline";
 
 describe("dayDiff", () => {
   it("считает через границы месяцев и лет", () => {

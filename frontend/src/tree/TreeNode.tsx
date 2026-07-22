@@ -366,6 +366,8 @@ export function NewTaskInput({
             await onSubmit(value.trim());
             setBusy(false);
             setValue("");
+            // создал одну — временное поле закрывается (не серийный ввод)
+            onClose?.();
           }
         }}
       />

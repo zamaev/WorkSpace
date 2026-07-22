@@ -35,6 +35,7 @@ type Task struct {
 	Position    int
 	DayPosition *int
 	Repeat      *string // JSON {"kind":"weekly","days":[1..7]} — правило повтора живой задачи серии
+	SeriesID    *int64  // якорь серии: id первой задачи; наследуется при спавне
 	CreatedAt   string
 	UpdatedAt   string
 }
@@ -256,7 +257,7 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 
 	var pos int
 	if err := tx.QueryRow(
-		`SELECT COALESCE(MAX(position)+1, 0) FROM tasks WHERE parent_id IS ? AND project_id = ?`, r.ParentID, projectID,
+		`SELECT COALESCE(MAX(position)+1, 0) FROM tasks WHERE parent_id IS ? AND project_id = ? AND deleted_at IS NULL`, r.ParentID, projectID,
 	).Scan(&pos); err != nil {
 		return Task{}, nil, err
 	}
@@ -265,7 +266,7 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	if r.ScheduledOn != nil {
 		var p int
 		if err := tx.QueryRow(
-			`SELECT COALESCE(MAX(day_position)+1, 0) FROM tasks WHERE scheduled_on = ?`, *r.ScheduledOn,
+			`SELECT COALESCE(MAX(day_position)+1, 0) FROM tasks WHERE scheduled_on = ? AND deleted_at IS NULL`, *r.ScheduledOn,
 		).Scan(&p); err != nil {
 			return Task{}, nil, err
 		}
@@ -311,7 +312,7 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 }
 
 func ListTasks(db *sql.DB) ([]Task, error) {
-	rows, err := db.Query(taskSelect + ` ORDER BY id`)
+	rows, err := db.Query(taskSelect + ` WHERE deleted_at IS NULL ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +409,11 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			}
 			m := marshalRepeat(*r.Repeat)
 			cur.Repeat = &m
+			// якорь серии: серия начинается с этой задачи; при снятии
+			// правила якорь остаётся — история серии связана
+			if cur.SeriesID == nil {
+				cur.SeriesID = &id
+			}
 		} else {
 			cur.Repeat = nil
 		}
@@ -447,8 +453,8 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		}
 	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, repeat = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, cur.Repeat, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, repeat = ?, series_id = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, cur.Repeat, cur.SeriesID, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -639,9 +645,9 @@ func spawnSeriesCopy(tx *sql.Tx, src Task, rule, dateISO string, affected map[in
 	}
 	ts := now()
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, repeat, type_id, assignee_id, position, day_position, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.TypeID, src.AssigneeID, len(sibs), len(day), ts, ts,
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, repeat, series_id, type_id, assignee_id, position, day_position, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.SeriesID, src.TypeID, src.AssigneeID, len(sibs), len(day), ts, ts,
 	)
 	if err != nil {
 		return err
@@ -699,9 +705,9 @@ func DeleteTask(db *sql.DB, id int64) (int, error) {
 		WITH RECURSIVE sub(id) AS (
 			SELECT id FROM tasks WHERE id = ?
 			UNION ALL
-			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id
+			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id WHERE t.deleted_at IS NULL
 		)
-		DELETE FROM tasks WHERE id IN (SELECT id FROM sub)`, id)
+		UPDATE tasks SET deleted_at = ? WHERE id IN (SELECT id FROM sub) AND deleted_at IS NULL`, id, now())
 	if err != nil {
 		return 0, err
 	}
@@ -720,7 +726,7 @@ func repaintSubtree(e interface {
 		WITH RECURSIVE sub(id) AS (
 			SELECT id FROM tasks WHERE id = ?
 			UNION ALL
-			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id
+			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id WHERE t.deleted_at IS NULL
 		)
 		SELECT id FROM sub`, id)
 	if err != nil {
@@ -742,13 +748,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, repeat, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, repeat, series_id, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.Repeat, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.Repeat, &t.SeriesID, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -762,7 +768,7 @@ type querier interface {
 }
 
 func loadOne(q querier, id int64) (Task, error) {
-	rows, err := q.Query(taskSelect+` WHERE id = ?`, id)
+	rows, err := q.Query(taskSelect+` WHERE id = ? AND deleted_at IS NULL`, id)
 	if err != nil {
 		return Task{}, err
 	}
@@ -800,7 +806,7 @@ func loadMany(q querier, ids map[int64]bool) ([]Task, error) {
 
 func mustExist(q querier, id int64, notFound error) error {
 	var n int
-	if err := q.QueryRow(`SELECT count(*) FROM tasks WHERE id = ?`, id).Scan(&n); err != nil {
+	if err := q.QueryRow(`SELECT count(*) FROM tasks WHERE id = ? AND deleted_at IS NULL`, id).Scan(&n); err != nil {
 		return err
 	}
 	if n == 0 {
@@ -816,7 +822,7 @@ func isDescendant(q querier, root, candidate int64) (bool, error) {
 		WITH RECURSIVE sub(id) AS (
 			SELECT id FROM tasks WHERE id = ?
 			UNION ALL
-			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id
+			SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id WHERE t.deleted_at IS NULL
 		)
 		SELECT count(*) FROM sub WHERE id = ?`, root, candidate).Scan(&n)
 	return n > 0, err
@@ -826,7 +832,7 @@ func isDescendant(q querier, root, candidate int64) (bool, error) {
 // проекта, иначе корни разных проектов перенумеровывали бы друг друга.
 func siblingIDs(q querier, parent *int64, projectID int64, exclude int64) ([]int64, error) {
 	rows, err := q.Query(
-		`SELECT id FROM tasks WHERE parent_id IS ? AND project_id = ? AND id != ? ORDER BY position`,
+		`SELECT id FROM tasks WHERE parent_id IS ? AND project_id = ? AND id != ? AND deleted_at IS NULL ORDER BY position`,
 		parent, projectID, exclude,
 	)
 	if err != nil {
@@ -837,7 +843,7 @@ func siblingIDs(q querier, parent *int64, projectID int64, exclude int64) ([]int
 }
 
 func dayIDs(q querier, day string, exclude int64) ([]int64, error) {
-	rows, err := q.Query(`SELECT id FROM tasks WHERE scheduled_on = ? AND id != ? ORDER BY day_position`, day, exclude)
+	rows, err := q.Query(`SELECT id FROM tasks WHERE scheduled_on = ? AND id != ? AND deleted_at IS NULL ORDER BY day_position`, day, exclude)
 	if err != nil {
 		return nil, err
 	}
