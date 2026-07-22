@@ -10,6 +10,8 @@ import type { Task } from "../data/types";
 import type { ReactNode } from "react";
 import { DayColumn } from "./DayColumn";
 import { TaskModal } from "../components/TaskDetails";
+import { useTaskFilters } from "../components/TaskFilters";
+import { WEEKENDS_KEY } from "../lib/prefs";
 
 // Строка плашки просрочки; действия приходят снаружи (у дедлайнов и плана они разные).
 function OverdueRow({ task, dateIso, children }: { task: Task; dateIso: string; children: ReactNode }) {
@@ -28,7 +30,6 @@ function OverdueRow({ task, dateIso, children }: { task: Task; dateIso: string; 
 
 const OVERDUE_KEY = "workspace-overdue-collapsed";
 const QUICK_PROJECT_KEY = "workspace-quick-project";
-const WEEKENDS_KEY = "workspace-hide-weekends";
 const TWO_WEEKS_KEY = "workspace-two-weeks";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -94,6 +95,7 @@ export function WeekView() {
     });
   };
   const [modalTask, setModalTask] = useState<number | null>(null);
+  const { matches, bar: filterBar } = useTaskFilters();
   const [twoWeeks, setTwoWeeks] = useState(() => {
     try {
       return localStorage.getItem(TWO_WEEKS_KEY) === "1";
@@ -138,8 +140,8 @@ export function WeekView() {
   }
 
   // задачи архивных проектов не показываем нигде в неделе
-  const late = overdue(tasks, today).filter((t) => isTaskVisible(projects, t));
-  const lateDue = overdueDeadline(tasks, today).filter((t) => isTaskVisible(projects, t));
+  const late = overdue(tasks, today).filter((t) => isTaskVisible(projects, t) && matches(t));
+  const lateDue = overdueDeadline(tasks, today).filter((t) => isTaskVisible(projects, t) && matches(t));
   const cut = hideWeekends ? 5 : 7;
   const days = weekDays(monday).slice(0, cut);
   const nextDays = twoWeeks ? weekDays(addDays(monday, 7)).slice(0, cut) : [];
@@ -160,8 +162,9 @@ export function WeekView() {
 
   return (
     <div>
-      <div className="flex items-center justify-between pb-4">
+      <div className="flex items-center justify-between gap-4 pb-4 flex-wrap">
         <h1 className="text-[17px] font-semibold m-0">{fmtWeekRange(monday)}</h1>
+        {filterBar}
         <div className="flex gap-2">
           <button type="button" className={`seg ${hideWeekends ? "" : "seg-on"}`} onClick={toggleWeekends} title="Показывать выходные">
             Сб–Вс
@@ -220,13 +223,13 @@ export function WeekView() {
 
       <div className="week-grid" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
         {days.map((d) => (
-          <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} onOpen={setModalTask} />
+          <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} onOpen={setModalTask} matches={matches} />
         ))}
       </div>
       {twoWeeks && (
         <div className="week-grid pt-3" style={{ gridTemplateColumns: `repeat(${nextDays.length}, minmax(0, 1fr))` }}>
           {nextDays.map((d) => (
-            <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} onOpen={setModalTask} />
+            <DayColumn key={d} day={d} quickProject={effectiveQuick} onQuickProject={pickQuickProject} onOpen={setModalTask} matches={matches} />
           ))}
         </div>
       )}

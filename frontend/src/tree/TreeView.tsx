@@ -6,6 +6,7 @@ import type { Project } from "../data/types";
 import { AvatarDot, MLabel } from "../components/ui";
 import { AnchoredPopover } from "../components/AnchoredPopover";
 import { NewTaskInput, TreeNode } from "./TreeNode";
+import { HIDE_DONE_KEY, readPref, writePref } from "../lib/prefs";
 
 const CLOSED_KEY = "workspace-closed";
 
@@ -30,6 +31,13 @@ export function TreeView({
   onSelect: (id: number | null) => void;
 }) {
   const { tasks, people, members, setMembers, create } = useData();
+  const [hideDone, setHideDone] = useState(() => readPref(HIDE_DONE_KEY) === "1");
+  const toggleHideDone = () => {
+    setHideDone((v) => {
+      writePref(HIDE_DONE_KEY, v ? null : "1");
+      return !v;
+    });
+  };
   const [membersOpen, setMembersOpen] = useState(false);
   const membersRef = useRef<HTMLButtonElement>(null);
   const memberIds = members.get(project.id) ?? [];
@@ -77,20 +85,18 @@ export function TreeView({
     return () => clearTimeout(timer);
   }, [params, tasks, setParams, onSelect]);
 
-  const roots = rootTasks(tasks, project.id);
+  const roots = rootTasks(tasks, project.id).filter((t) => !hideDone || !t.done);
 
   return (
     <div className="flex-1 min-w-0 panel px-3 py-3">
       <div className="flex items-center gap-3 px-3 pb-2">
         <MLabel>{project.name}</MLabel>
-        <span className="flex items-center -space-x-1.5">
+        <span className="flex items-center gap-1">
           {memberIds
             .map((id) => people.get(id))
             .filter((p) => p !== undefined)
             .map((p) => (
-              <span key={p.id} className="ring-2 ring-panel rounded-full">
-                <AvatarDot name={p.name} color={p.color} size={18} />
-              </span>
+              <AvatarDot key={p.id} name={p.name} color={p.color} size={18} />
             ))}
         </span>
         <button
@@ -101,6 +107,15 @@ export function TreeView({
           onClick={() => setMembersOpen((v) => !v)}
         >
           ＋
+        </button>
+        <span className="flex-1" />
+        <button
+          type="button"
+          className={`seg !px-2 !py-1 !text-[11px] ${hideDone ? "seg-on" : ""}`}
+          title="Скрыть сделанные задачи (с их поддеревьями)"
+          onClick={toggleHideDone}
+        >
+          скрыть ✓
         </button>
         {membersOpen && (
           <AnchoredPopover anchorRef={membersRef} onClose={() => setMembersOpen(false)}>
@@ -149,6 +164,7 @@ export function TreeView({
           flashId={flashId}
           selectedId={selectedId}
           onSelect={(id) => onSelect(id)}
+          hideDone={hideDone}
         />
       ))}
       <NewTaskInput

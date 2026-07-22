@@ -528,6 +528,41 @@
     box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.55);
   }
 
+  /* ── полоска-дропзона недели при перетаскивании задачи ── */
+
+  .dragweek {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 18px;
+    z-index: 55;
+    display: flex;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 8px;
+    box-shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.5);
+  }
+  .dragweek-cell {
+    width: 84px;
+    padding: 10px 4px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--dim);
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+  }
+  .wcell-today {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .wcell-drop {
+    background: var(--asoft);
+    border-color: var(--accent);
+    border-style: solid;
+  }
+
   /* ── маркёры цвета проекта (идиома space: цвет — маркёр, не заливка) ── */
 
   .sbar {

@@ -5,7 +5,9 @@ import { useData } from "../data/DataProvider";
 import { childProjects, projectSubtreeIds, projectUndone } from "../data/selectors";
 import { TaskDetails } from "../components/TaskDetails";
 import { PALETTE, nextColor, type Project } from "../data/types";
-import { getDragTask, hasDragTask } from "./dnd";
+import { getDragTask, hasDragTask, setDragGhost } from "./dnd";
+import { SELECTED_TASK_KEY, WEEKENDS_KEY, readPref, writePref } from "../lib/prefs";
+import { addDays, dayDiff, fmtDayHeader, mondayOf, todayISO, weekDays } from "../lib/dates";
 import { ConfirmButton } from "../components/ConfirmButton";
 import { TreeView } from "./TreeView";
 
@@ -70,10 +72,83 @@ function loadClosed(): Set<number> {
   return new Set();
 }
 
+// Полоска-дропзона недели: живёт только пока тащат задачу.
+function DragWeekStrip() {
+  const { tasks, patch } = useData();
+  const [visible, setVisible] = useState(false);
+  const [over, setOver] = useState<string | null>(null);
+  const today = todayISO();
+
+  useEffect(() => {
+    // Event, не React.DragEvent: слушатель нативный (window)
+    const onStart = (e: Event) => {
+      const el = e.target as HTMLElement | null;
+      if (el && el.closest && el.closest(".tree-row")) setVisible(true);
+    };
+    const onEnd = () => {
+      setVisible(false);
+      setOver(null);
+    };
+    window.addEventListener("dragstart", onStart);
+    window.addEventListener("dragend", onEnd);
+    window.addEventListener("drop", onEnd);
+    return () => {
+      window.removeEventListener("dragstart", onStart);
+      window.removeEventListener("dragend", onEnd);
+      window.removeEventListener("drop", onEnd);
+    };
+  }, []);
+
+  if (!visible) return null;
+  const cut = readPref(WEEKENDS_KEY) === "1" ? 5 : 7;
+  const days = weekDays(mondayOf(today)).slice(0, cut);
+
+  return (
+    <div className="dragweek">
+      {days.map((day) => (
+        <div
+          key={day}
+          className={`dragweek-cell ${day === today ? "wcell-today" : ""} ${over === day ? "wcell-drop" : ""}`}
+          onDragOver={(e) => {
+            if (!hasDragTask(e)) return;
+            e.preventDefault();
+            setOver(day);
+          }}
+          onDragLeave={() => setOver((v) => (v === day ? null : v))}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(null);
+            setVisible(false);
+            const id = getDragTask(e);
+            if (id === null) return;
+            const t = tasks.get(id);
+            if (!t) return;
+            if (t.scheduledOn !== null && t.endOn !== null) {
+              const len = dayDiff(t.scheduledOn, t.endOn);
+              void patch(id, { scheduledOn: day, endOn: addDays(day, len) });
+            } else {
+              void patch(id, { scheduledOn: day });
+            }
+          }}
+        >
+          {fmtDayHeader(day)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ProjectsView() {
   const { pid } = useParams();
   const { projects, tasks, loading, offline, retry } = useData();
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelectedState] = useState<number | null>(() => {
+    const raw = readPref(SELECTED_TASK_KEY);
+    return raw ? Number(raw) : null;
+  });
+  const setSelected = (id: number | null) => {
+    setSelectedState(id);
+    writePref(SELECTED_TASK_KEY, id === null ? null : String(id));
+  };
   const [sideW, setSideW] = useState(() => readWidth(SIDE_W_KEY, 232, 180, 400));
   const [inspW, setInspW] = useState(() => readWidth(INSP_W_KEY, 300, 240, 440));
 
@@ -155,6 +230,7 @@ export function ProjectsView() {
           }
         />
       )}
+      <DragWeekStrip />
       {current && (
         <aside className="inspector panel px-4 py-4" style={{ width: inspW }}>
           {effectiveSelected !== null ? (
@@ -366,7 +442,10 @@ function SidebarNode({
         className={`proj-row ${active ? "proj-row-on" : ""} ${zoneCls}`}
         style={{ marginLeft: depth * 14 }}
         draggable={!renaming}
-        onDragStart={(e) => setDragProject(e, project.id)}
+        onDragStart={(e) => {
+          setDragProject(e, project.id);
+          setDragGhost(e, e.currentTarget as HTMLElement);
+        }}
         onDragOver={(e) => {
           if (!hasDragProject(e) && !hasDragTask(e)) return;
           e.preventDefault();

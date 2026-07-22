@@ -4,7 +4,7 @@ import { useData } from "../data/DataProvider";
 import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { plural } from "../lib/plural";
-import { AvatarDot, Check, MLabel, SDot, TrashIcon } from "./ui";
+import { AvatarDot, CalendarIcon, Check, MLabel, SDot, TrashIcon } from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
 import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker } from "./DatePicker";
@@ -36,10 +36,25 @@ export function TaskDetails({
   const typeRef = useRef<HTMLButtonElement>(null);
   const assigneeRef = useRef<HTMLButtonElement>(null);
 
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     setTitle(task?.title ?? "");
     setPicker(null);
   }, [taskId, task?.title]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  // тихое сохранение через паузу после набора — обновление страницы
+  // больше не теряет текст
+  const debounced = (fn: () => void) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(fn, 800);
+  };
 
   // автовысота описания: поле растёт под содержимое, без скролла
   useEffect(() => {
@@ -80,16 +95,37 @@ export function TaskDetails({
           name="task-title"
           aria-label="Название задачи"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setTitle(v);
+            debounced(() => {
+              if (v.trim() && v.trim() !== task.title) void patch(task.id, { title: v.trim() });
+            });
+          }}
           onBlur={saveTitle}
           onKeyDown={(e) => {
             if (e.key === "Enter") saveTitle();
             if (e.key === "Escape") setTitle(task.title);
           }}
         />
-        <button type="button" className="row-btn" title="Закрыть" onClick={onClose}>
-          ✕
-        </button>
+        {variant === "panel" ? (
+          <ConfirmButton
+            className="row-btn row-btn-danger"
+            armedClassName="!bg-over/15 !text-over"
+            confirmLabel="✓"
+            title={subtreeCount > 1 ? `Удалить с подзадачами (${subtreeCount}) — второй клик` : "Удалить — второй клик"}
+            onConfirm={() => {
+              void remove(task.id);
+              onClose();
+            }}
+          >
+            <TrashIcon />
+          </ConfirmButton>
+        ) : (
+          <button type="button" className="row-btn" title="Закрыть" onClick={onClose}>
+            ✕
+          </button>
+        )}
       </div>
 
       {showCrumb && project && (
@@ -104,13 +140,14 @@ export function TaskDetails({
         <button
           ref={planRef}
           type="button"
-          className={`chip ${picker === "plan" ? "chip-accent-border" : task.scheduledOn ? (planOverdue ? "date-chip-over" : "chip-accent") : ""}`}
+          className={`chip flex items-center gap-1.5 ${picker === "plan" ? "chip-accent-border" : task.scheduledOn ? (planOverdue ? "date-chip-over" : "chip-accent") : ""}`}
           onClick={() => toggle("plan")}
           title="План работы"
         >
+          <CalendarIcon />
           {task.scheduledOn
             ? `${fmtDayChip(task.scheduledOn)}${task.endOn ? ` → ${fmtDayChip(task.endOn)}` : ""}`
-            : "＋ план"}
+            : "план"}
         </button>
         <button
           ref={dueRef}
@@ -119,7 +156,7 @@ export function TaskDetails({
           onClick={() => toggle("due")}
           title="Дедлайн"
         >
-          {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "⚑"}
+          {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "⚑ дедлайн"}
         </button>
         <button
           ref={typeRef}
@@ -162,8 +199,7 @@ export function TaskDetails({
             endValue={task.endOn}
             title="План"
             allowRange
-            onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
-            onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
+            onChange={(start, end) => void patch(task.id, { scheduledOn: start, endOn: end })}
             onClose={() => setPicker(null)}
           />
         </AnchoredPopover>
@@ -173,7 +209,7 @@ export function TaskDetails({
           <DatePicker
             value={task.dueOn}
             title="Дедлайн"
-            onPick={(iso) => void patch(task.id, { dueOn: iso })}
+            onChange={(start) => void patch(task.id, { dueOn: start })}
             onClose={() => setPicker(null)}
           />
         </AnchoredPopover>
@@ -269,32 +305,37 @@ export function TaskDetails({
             const el = e.currentTarget;
             el.style.height = "auto";
             el.style.height = `${el.scrollHeight}px`;
+            const v = el.value;
+            debounced(() => {
+              if (v !== task.description) void patch(task.id, { description: v });
+            });
           }}
           onBlur={(e) => {
+            if (saveTimer.current) clearTimeout(saveTimer.current);
             const v = e.target.value;
             if (v !== task.description) void patch(task.id, { description: v });
           }}
         />
       </div>
 
-      <div className="flex items-center justify-between pt-1">
-        <ConfirmButton
-          className="seg flex items-center gap-1.5"
-          armedClassName="!text-over !border-over"
-          confirmLabel={subtreeCount > 1 ? `удалить ${plural(subtreeCount, ["задачу", "задачи", "задач"])}?` : "точно удалить?"}
-          onConfirm={() => {
-            void remove(task.id);
-            onClose();
-          }}
-        >
-          <TrashIcon /> Удалить
-        </ConfirmButton>
-        {variant === "modal" && (
+      {variant === "modal" && (
+        <div className="flex items-center justify-between pt-1">
+          <ConfirmButton
+            className="seg flex items-center gap-1.5"
+            armedClassName="!text-over !border-over"
+            confirmLabel={subtreeCount > 1 ? `удалить ${plural(subtreeCount, ["задачу", "задачи", "задач"])}?` : "точно удалить?"}
+            onConfirm={() => {
+              void remove(task.id);
+              onClose();
+            }}
+          >
+            <TrashIcon /> Удалить
+          </ConfirmButton>
           <Link to={`/projects/${task.projectId}?focus=${task.id}`} className="mmeta !text-accent" onClick={onClose}>
             в дереве →
           </Link>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
