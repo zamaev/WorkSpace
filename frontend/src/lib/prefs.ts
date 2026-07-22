@@ -1,6 +1,7 @@
 // Общие localStorage-ключи и помощники настроек интерфейса.
 
 export const WEEKENDS_KEY = "workspace-hide-weekends";
+export const TWO_WEEKS_KEY = "workspace-two-weeks";
 export const FILTER_ASSIGNEE_KEY = "workspace-filter-assignee";
 export const FILTER_TYPE_KEY = "workspace-filter-type";
 export const HIDE_DONE_KEY = "workspace-hide-done";

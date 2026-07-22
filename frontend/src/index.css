@@ -375,6 +375,26 @@
     bottom: -1px;
   }
 
+  /* дедлайн: красноватый всегда, жёстко-красный при наступлении */
+  .chip-due {
+    background: color-mix(in srgb, var(--over) 10%, transparent);
+    color: color-mix(in srgb, var(--over) 78%, var(--text));
+    border-color: color-mix(in srgb, var(--over) 28%, transparent);
+  }
+  .chip-due-hard {
+    background: var(--over);
+    color: #fff;
+    border-color: var(--over);
+    font-weight: 600;
+  }
+
+  .filter-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--line);
+    flex: none;
+  }
+
   .date-chip-over {
     color: var(--over);
     border-color: color-mix(in srgb, var(--over) 45%, transparent);

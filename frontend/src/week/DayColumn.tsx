@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Check, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { flattenActiveProjects, isTaskVisible, spanTasksOn, tasksOn } from "../data/selectors";
+import {
+  flattenActiveProjects,
+  isTaskVisible,
+  spanTasksOn,
+  tasksOn,
+} from "../data/selectors";
 import { addDays, dayDiff, fmtDayHeader, todayISO } from "../lib/dates";
-import { getDragTask, hasDragTask, setDragGhost, setDragTask } from "../tree/dnd";
+import {
+  getDragTask,
+  hasDragTask,
+  setDragGhost,
+  setDragTask,
+} from "../tree/dnd";
 import { TaskCard } from "./TaskCard";
 
 export function DayColumn({
@@ -27,15 +37,21 @@ export function DayColumn({
   const [picker, setPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const list = tasksOn(tasks, day).filter((t) => isTaskVisible(projects, t) && matches(t));
-  const spans = spanTasksOn(tasks, day).filter((t) => isTaskVisible(projects, t) && matches(t));
+  const list = tasksOn(tasks, day).filter(
+    (t) => isTaskVisible(projects, t) && matches(t),
+  );
+  const spans = spanTasksOn(tasks, day).filter(
+    (t) => isTaskVisible(projects, t) && matches(t),
+  );
   const isToday = day === todayISO();
-  const project = quickProject !== null ? projects.get(quickProject) : undefined;
+  const project =
+    quickProject !== null ? projects.get(quickProject) : undefined;
 
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPicker(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+        setPicker(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPicker(false);
@@ -92,7 +108,11 @@ export function DayColumn({
       void patch(id, { dayPosition: idx });
     } else if (t.scheduledOn !== null && t.endOn !== null) {
       const len = dayDiff(t.scheduledOn, t.endOn);
-      void patch(id, { scheduledOn: day, endOn: addDays(day, len), dayPosition: idx });
+      void patch(id, {
+        scheduledOn: day,
+        endOn: addDays(day, len),
+        dayPosition: idx,
+      });
     } else {
       void patch(id, { scheduledOn: day, dayPosition: idx });
     }
@@ -121,8 +141,16 @@ export function DayColumn({
       onDrop={onColumnDrop}
     >
       <div className={`day-head ${isToday ? "!border-accent" : ""}`}>
-        <span className={`text-[13px] font-semibold ${isToday ? "text-accent" : ""}`}>{fmtDayHeader(day)}</span>
-        {list.length > 0 && <span className="mmeta">{list.filter((t) => t.done).length}/{list.length}</span>}
+        <span
+          className={`text-[13px] font-semibold ${isToday ? "text-accent" : ""}`}
+        >
+          {fmtDayHeader(day)}
+        </span>
+        {list.length > 0 && (
+          <span className="mmeta">
+            {list.filter((t) => t.done).length}/{list.length}
+          </span>
+        )}
       </div>
       {spans.map((t) => (
         <SpanCard key={`s${t.id}`} task={t} day={day} onOpen={onOpen} />
@@ -152,23 +180,28 @@ export function DayColumn({
             {picker && (
               <div className="popover popover-left !w-[200px]">
                 <div className="mlabel mb-1">В какой проект</div>
-                {flattenActiveProjects(projects).map(({ project: p, depth }) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="pop-item"
-                    onClick={() => {
-                      onQuickProject(p.id);
-                      setPicker(false);
-                    }}
-                  >
-                    <span className="flex items-center gap-2 min-w-0" style={{ paddingLeft: depth * 12 }}>
-                      <SDot color={p.color} />
-                      <span className="truncate">{p.name}</span>
-                    </span>
-                    {p.id === project.id && <span className="mmeta">✓</span>}
-                  </button>
-                ))}
+                {flattenActiveProjects(projects).map(
+                  ({ project: p, depth }) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="pop-item"
+                      onClick={() => {
+                        onQuickProject(p.id);
+                        setPicker(false);
+                      }}
+                    >
+                      <span
+                        className="flex items-center gap-2 min-w-0"
+                        style={{ paddingLeft: depth * 12 }}
+                      >
+                        <SDot color={p.color} />
+                        <span className="truncate">{p.name}</span>
+                      </span>
+                      {p.id === project.id && <span className="mmeta">✓</span>}
+                    </button>
+                  ),
+                )}
               </div>
             )}
           </div>
@@ -183,7 +216,11 @@ export function DayColumn({
             onKeyDown={async (e) => {
               if (e.key === "Enter" && draft.trim()) {
                 setBusy(true);
-                await create({ title: draft.trim(), scheduledOn: day, projectId: project.id });
+                await create({
+                  title: draft.trim(),
+                  scheduledOn: day,
+                  projectId: project.id,
+                });
                 setBusy(false);
                 setDraft("");
               }
@@ -192,7 +229,9 @@ export function DayColumn({
           />
         </div>
       ) : (
-        <p className="text-[12px] text-dim px-1 pt-1 m-0">Сначала создай проект</p>
+        <p className="text-[12px] text-dim px-1 pt-1 m-0">
+          Сначала создай проект
+        </p>
       )}
     </div>
   );
@@ -200,14 +239,23 @@ export function DayColumn({
 
 // «Продолжение» многодневной задачи: чекбокс + приглушённое название + «k/N».
 // Drag двигает весь диапазон (обрабатывает колонка-приёмник).
-function SpanCard({ task, day, onOpen }: { task: import("../data/types").Task; day: string; onOpen: (id: number) => void }) {
+function SpanCard({
+  task,
+  day,
+  onOpen,
+}: {
+  task: import("../data/types").Task;
+  day: string;
+  onOpen: (id: number) => void;
+}) {
   const { patch } = useData();
   const k = dayDiff(task.scheduledOn!, day) + 1;
   const n = dayDiff(task.scheduledOn!, task.endOn!) + 1;
   return (
     <div
-      className="span-card"
+      className="span-card cursor-pointer"
       draggable
+      onClick={() => onOpen(task.id)}
       onDragStart={(e) => {
         setDragTask(e, task.id);
         setDragGhost(e, e.currentTarget as HTMLElement);
@@ -217,17 +265,20 @@ function SpanCard({ task, day, onOpen }: { task: import("../data/types").Task; d
         size="sm"
         done={task.done}
         label={task.done ? "Снять отметку" : "Отметить сделанной"}
-        onClick={() => void patch(task.id, { done: !task.done })}
+        onClick={(e) => {
+          e.stopPropagation();
+          void patch(task.id, { done: !task.done });
+        }}
       />
-      <button
-        type="button"
+      <span
         className={`flex-1 min-w-0 truncate text-left text-[12.5px] ${task.done ? "line-through" : ""}`}
-        onClick={() => onOpen(task.id)}
         title="Детали"
       >
         {task.title}
-      </button>
-      <span className="mmeta">{k}/{n}</span>
+      </span>
+      <span className="mmeta">
+        {k}/{n}
+      </span>
     </div>
   );
 }

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useData } from "../data/DataProvider";
-import { FILTER_ASSIGNEE_KEY, FILTER_TYPE_KEY, readPref, writePref } from "../lib/prefs";
+import {
+  FILTER_ASSIGNEE_KEY,
+  FILTER_TYPE_KEY,
+  readPref,
+  writePref,
+} from "../lib/prefs";
 import type { Task } from "../data/types";
 import { AvatarDot } from "./ui";
 import { TypeBadge } from "./TypeBadge";
@@ -9,8 +14,14 @@ import { TypeBadge } from "./TypeBadge";
 // Возвращает предикат и готовую панель; состояние — в localStorage.
 export function useTaskFilters() {
   const { people, types } = useData();
-  const [assignee, setAssignee] = useState<string>(() => readPref(FILTER_ASSIGNEE_KEY) ?? "all");
-  const [type, setType] = useState<string>(() => readPref(FILTER_TYPE_KEY) ?? "all");
+  // легаси-значение "me" из прежней версии трактуем как «все»
+  const [assignee, setAssignee] = useState<string>(() => {
+    const v = readPref(FILTER_ASSIGNEE_KEY);
+    return v === null || v === "me" ? "all" : v;
+  });
+  const [type, setType] = useState<string>(
+    () => readPref(FILTER_TYPE_KEY) ?? "all",
+  );
 
   const pickAssignee = (v: string) => {
     setAssignee(v);
@@ -22,8 +33,7 @@ export function useTaskFilters() {
   };
 
   const matches = (t: Task): boolean => {
-    if (assignee === "me" && t.assigneeId !== null) return false;
-    if (assignee !== "all" && assignee !== "me" && t.assigneeId !== Number(assignee)) return false;
+    if (assignee !== "all" && t.assigneeId !== Number(assignee)) return false;
     if (type !== "all" && t.typeId !== Number(type)) return false;
     return true;
   };
@@ -31,16 +41,8 @@ export function useTaskFilters() {
   const active = assignee !== "all" || type !== "all";
 
   const bar = (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          className={`seg !px-2 !py-1 !text-[11px] ${assignee === "me" ? "seg-on" : ""}`}
-          title="Задачи без исполнителя — мои"
-          onClick={() => pickAssignee(assignee === "me" ? "all" : "me")}
-        >
-          я
-        </button>
+    <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-1.5">
         {[...people.values()]
           .sort((a, b) => a.position - b.position || a.id - b.id)
           .map((p) => {
@@ -49,9 +51,16 @@ export function useTaskFilters() {
               <button
                 key={p.id}
                 type="button"
-                className={`rounded-full ${on ? "" : "opacity-45 hover:opacity-100"}`}
-                style={on ? { outline: "2px solid var(--accent)", outlineOffset: 1, borderRadius: "50%" } : undefined}
-                title={p.name}
+                className={`rounded-full flex ${on ? "" : "opacity-45 hover:opacity-100"}`}
+                style={
+                  on
+                    ? {
+                        boxShadow:
+                          "0 0 0 2px var(--bg), 0 0 0 4px var(--accent)",
+                      }
+                    : undefined
+                }
+                title={on ? `${p.name} — снять фильтр` : p.name}
                 onClick={() => pickAssignee(on ? "all" : String(p.id))}
               >
                 <AvatarDot name={p.name} color={p.color} size={20} />
@@ -59,6 +68,7 @@ export function useTaskFilters() {
             );
           })}
       </div>
+      {types.size > 0 && people.size > 0 && <span className="filter-divider" />}
       {types.size > 0 && (
         <div className="flex items-center gap-1">
           {[...types.values()]
@@ -70,8 +80,10 @@ export function useTaskFilters() {
                   key={t.id}
                   type="button"
                   className={`w-[26px] h-[24px] rounded-[8px] flex items-center justify-center ${on ? "bg-asoft" : "opacity-45 hover:opacity-100"}`}
-                  style={on ? { outline: "1px solid var(--accent)" } : undefined}
-                  title={t.name}
+                  style={
+                    on ? { outline: "1px solid var(--accent)" } : undefined
+                  }
+                  title={on ? `${t.name} — снять фильтр` : t.name}
                   onClick={() => pickType(on ? "all" : String(t.id))}
                 >
                   <TypeBadge type={t} size={13} />
@@ -79,19 +91,6 @@ export function useTaskFilters() {
               );
             })}
         </div>
-      )}
-      {active && (
-        <button
-          type="button"
-          className="chip chip-accent"
-          title="Показать все задачи"
-          onClick={() => {
-            pickAssignee("all");
-            pickType("all");
-          }}
-        >
-          фильтр · сбросить ✕
-        </button>
       )}
     </div>
   );
