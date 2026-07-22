@@ -1,5 +1,7 @@
 import type {
   CreateTaskReq,
+  Note,
+  NotePatch,
   Person,
   Project,
   ProjectPatch,
@@ -115,6 +117,34 @@ export function patchType(
 
 export function deleteType(id: number): Promise<{ ok: boolean }> {
   return request(`/api/types/${id}`, { method: "DELETE" });
+}
+
+export function fetchNotes(): Promise<{ notes: Note[] }> {
+  return request("/api/notes");
+}
+
+export function createNote(
+  title: string,
+  parentId: number | null,
+): Promise<{ note: Note }> {
+  return request("/api/notes", {
+    method: "POST",
+    body: JSON.stringify({ title, parentId }),
+  });
+}
+
+export function patchNote(
+  id: number,
+  patch: NotePatch,
+): Promise<{ notes: Note[] }> {
+  return request(`/api/notes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteNote(id: number): Promise<{ deleted: number }> {
+  return request(`/api/notes/${id}`, { method: "DELETE" });
 }
 
 export function fetchPeople(): Promise<{ people: Person[] }> {

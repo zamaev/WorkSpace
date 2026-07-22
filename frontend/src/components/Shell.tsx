@@ -39,6 +39,7 @@ export function Shell({ children }: { children: ReactNode }) {
       if (e.key === "3") navigate("/gantt");
       if (e.key === "4") navigate("/team");
       if (e.key === "5") navigate("/types");
+      if (e.key === "6") navigate("/notes");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -90,6 +91,13 @@ export function Shell({ children }: { children: ReactNode }) {
           >
             Типы
           </NavLink>
+          <NavLink
+            to="/notes"
+            title="Заметки — клавиша 6"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
+            Заметки
+          </NavLink>
         </nav>
         <div className="flex gap-2">
           <button
@@ -120,8 +128,8 @@ export function Shell({ children }: { children: ReactNode }) {
               <div className="mlabel">Клавиши</div>
               <div className="flex flex-col gap-1">
                 <span>
-                  <span className="mmeta">1–5</span> — Проекты · Неделя · Гант ·
-                  Команда · Типы
+                  <span className="mmeta">1–6</span> — Проекты · Неделя · Гант ·
+                  Команда · Типы · Заметки
                 </span>
                 <span>
                   <span className="mmeta">⌘K</span> — поиск задач и проектов

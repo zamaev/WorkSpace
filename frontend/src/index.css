@@ -520,6 +520,203 @@
     background: var(--asoft);
   }
 
+  /* ── заметки ── */
+
+  .notes-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .notes-side {
+    width: 280px;
+    flex: none;
+    position: sticky;
+    top: 14px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  .notes-editor {
+    flex: 1;
+    min-width: 0;
+    min-height: calc(100vh - 120px);
+  }
+  /* мобильный: дерево и редактор друг под другом */
+  @media (max-width: 720px) {
+    .notes-layout {
+      flex-direction: column;
+    }
+    .notes-side {
+      width: 100%;
+      position: static;
+      max-height: 44vh;
+    }
+    .notes-editor {
+      width: 100%;
+      min-height: 55vh;
+    }
+  }
+  /* панель форматирования WYSIWYG-редактора */
+  .note-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-wrap: wrap;
+    padding: 4px 0 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .note-tool {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 7px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--dim);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .note-tool:hover {
+    background: var(--asoft);
+    color: var(--text);
+  }
+  .note-tool-on {
+    background: var(--asoft);
+    color: var(--accent);
+  }
+  .note-tool-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--line);
+    margin: 0 3px;
+    flex: none;
+  }
+  /* WYSIWYG-поле (ProseMirror): пишешь и сразу видишь форматирование */
+  .ProseMirror {
+    outline: none;
+    min-height: 55vh;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--dim);
+    opacity: 0.55;
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+  .ProseMirror h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+  }
+  .ProseMirror h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+  }
+  .ProseMirror h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+  }
+  .ProseMirror p {
+    margin: 0.45em 0;
+  }
+  .ProseMirror ul,
+  .ProseMirror ol {
+    margin: 0.45em 0;
+    padding-left: 1.5em;
+  }
+  .ProseMirror ul {
+    list-style: disc;
+  }
+  .ProseMirror ol {
+    list-style: decimal;
+  }
+  .ProseMirror li {
+    margin: 0.1em 0;
+  }
+  .ProseMirror blockquote {
+    margin: 0.6em 0;
+    padding: 0.2em 0 0.2em 0.9em;
+    border-left: 3px solid var(--accent);
+    color: var(--dim);
+  }
+  .ProseMirror code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.88em;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 5px;
+  }
+  .ProseMirror pre {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 0.6em 0;
+  }
+  /* блок кода с NodeView: шапка-селектор языка + (для mermaid) диаграмма */
+  .ProseMirror .code-block {
+    margin: 0.6em 0;
+  }
+  .code-block-head {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -6px;
+  }
+  .code-lang {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--dim);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+  .code-block .mermaid-render {
+    display: flex;
+    justify-content: center;
+    padding: 14px;
+    margin-top: 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    overflow-x: auto;
+  }
+  .code-block .mermaid-render svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .code-block .mermaid-error {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--over);
+    border-radius: 8px;
+    color: var(--over);
+    font-size: 12px;
+  }
+  .ProseMirror pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86em;
+  }
+  .ProseMirror a {
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .ProseMirror hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 1em 0;
+  }
+
   /* ── инспектор задачи ── */
 
   .inspector {

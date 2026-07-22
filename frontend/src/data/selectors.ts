@@ -1,4 +1,30 @@
-import type { Project, Task } from "./types";
+import type { Note, Project, Task } from "./types";
+
+// ── заметки (древовидная вики) ──
+
+export function noteChildren(
+  notes: Map<number, Note>,
+  parentId: number | null,
+): Note[] {
+  const out: Note[] = [];
+  for (const n of notes.values()) {
+    if (n.parentId === parentId) out.push(n);
+  }
+  return out.sort((a, b) => a.position - b.position || a.id - b.id);
+}
+
+export function noteSubtreeIds(notes: Map<number, Note>, id: number): number[] {
+  const out: number[] = [];
+  const stack = [id];
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    out.push(cur);
+    for (const n of notes.values()) {
+      if (n.parentId === cur) stack.push(n.id);
+    }
+  }
+  return out;
+}
 
 // Чистые выборки из Map задач. Дерево и день собираются на клиенте —
 // сервер отдаёт плоский список.

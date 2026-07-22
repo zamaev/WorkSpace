@@ -51,6 +51,35 @@ type projectJSON struct {
 	UpdatedAt string  `json:"updatedAt"`
 }
 
+type noteJSON struct {
+	ID        int64  `json:"id"`
+	ParentID  *int64 `json:"parentId"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Position  int    `json:"position"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+func toNoteJSON(n store.Note) noteJSON {
+	return noteJSON(n)
+}
+
+func toNoteList(ns []store.Note) []noteJSON {
+	out := make([]noteJSON, len(ns))
+	for i, n := range ns {
+		out[i] = toNoteJSON(n)
+	}
+	return out
+}
+
+type noteBody struct {
+	Title    Opt[string] `json:"title"`
+	Body     Opt[string] `json:"body"`
+	ParentID Opt[int64]  `json:"parentId"`
+	Position Opt[int]    `json:"position"`
+}
+
 func toJSON(t store.Task) taskJSON {
 	j := taskJSON{
 		ID: t.ID, ParentID: t.ParentID, ProjectID: t.ProjectID,
@@ -207,6 +236,70 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
+	// ── заметки ──
+
+	mux.HandleFunc("GET /api/notes", func(w http.ResponseWriter, r *http.Request) {
+		notes, err := store.ListNotes(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"notes": toNoteList(notes)})
+	})
+
+	mux.HandleFunc("POST /api/notes", func(w http.ResponseWriter, r *http.Request) {
+		var b noteBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		title := ""
+		if b.Title.Val != nil {
+			title = *b.Title.Val
+		}
+		n, err := store.CreateNote(db, title, b.ParentID.Val)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"note": toNoteJSON(n)})
+	})
+
+	mux.HandleFunc("PATCH /api/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b noteBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		upd := store.NoteUpdate{Title: b.Title.Val, Body: b.Body.Val, Position: b.Position.Val}
+		if b.ParentID.Set {
+			upd.SetParentID, upd.ParentID = true, b.ParentID.Val
+		}
+		notes, err := store.UpdateNote(db, id, upd)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"notes": toNoteList(notes)})
+	})
+
+	mux.HandleFunc("DELETE /api/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		n, err := store.DeleteNote(db, id)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
 	})
 
 	// ── типы задач ──

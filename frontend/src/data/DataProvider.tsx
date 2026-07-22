@@ -9,9 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import * as api from "./api";
-import { subtreeIds } from "./selectors";
+import { noteSubtreeIds, subtreeIds } from "./selectors";
 import type {
   CreateTaskReq,
+  Note,
+  NotePatch,
   Person,
   Project,
   ProjectPatch,
@@ -28,6 +30,7 @@ type Store = {
   people: Map<number, Person>;
   roles: Map<number, Role>;
   members: Map<number, number[]>; // projectId → personIds
+  notes: Map<number, Note>;
   loading: boolean;
   offline: boolean;
   error: string | null;
@@ -66,6 +69,9 @@ type Store = {
     }>,
   ) => Promise<void>;
   removePerson: (id: number) => Promise<void>;
+  createNote: (title: string, parentId: number | null) => Promise<Note | null>;
+  patchNote: (id: number, p: NotePatch) => Promise<void>;
+  removeNote: (id: number) => Promise<void>;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -115,6 +121,11 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
   };
 }
 
+function stripNote(n: Note & { createdAt?: string; updatedAt?: string }): Note {
+  const { id, parentId, title, body, position } = n;
+  return { id, parentId, title, body, position };
+}
+
 function stripProject(
   p: Project & { createdAt?: string; updatedAt?: string },
 ): Project {
@@ -129,6 +140,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [people, setPeople] = useState<Map<number, Person>>(new Map());
   const [roles, setRoles] = useState<Map<number, Role>>(new Map());
   const [members, setMembersState] = useState<Map<number, number[]>>(new Map());
+  const [notes, setNotes] = useState<Map<number, Note>>(new Map());
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +162,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         { people: peopleList },
         { roles: roleList },
         { members: memberList },
+        { notes: noteList },
       ] = await Promise.all([
         api.fetchTasks(),
         api.fetchProjects(),
@@ -157,6 +170,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         api.fetchPeople(),
         api.fetchRoles(),
         api.fetchMembers(),
+        api.fetchNotes(),
       ]);
       setTasks(new Map(taskList.map((t) => [t.id, stripTask(t)])));
       setProjects(new Map(projectList.map((p) => [p.id, stripProject(p)])));
@@ -168,6 +182,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         mm.set(m.projectId, [...(mm.get(m.projectId) ?? []), m.personId]);
       }
       setMembersState(mm);
+      setNotes(new Map((noteList ?? []).map((n) => [n.id, stripNote(n)])));
       setOffline(false);
     } catch {
       setOffline(true);
@@ -545,6 +560,74 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [people, tasks, toast],
   );
 
+  const mergeNotes = useCallback((updated: Note[]) => {
+    setNotes((prev) => {
+      const next = new Map(prev);
+      for (const n of updated) next.set(n.id, stripNote(n));
+      return next;
+    });
+  }, []);
+
+  const restoreNotes = useCallback(async () => {
+    try {
+      const { notes: fresh } = await api.fetchNotes();
+      setNotes(new Map(fresh.map((n) => [n.id, stripNote(n)])));
+    } catch {
+      // сервер недоступен — поправит следующий успешный запрос
+    }
+  }, []);
+
+  const createNote = useCallback(
+    async (title: string, parentId: number | null): Promise<Note | null> => {
+      try {
+        const { note } = await api.createNote(title, parentId);
+        setNotes((prev) => new Map(prev).set(note.id, stripNote(note)));
+        return note;
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Не удалось создать заметку");
+        return null;
+      }
+    },
+    [toast],
+  );
+
+  const patchNote = useCallback(
+    async (id: number, p: NotePatch) => {
+      if (!notes.has(id)) return;
+      setNotes((prev) => {
+        const cur = prev.get(id);
+        if (!cur) return prev;
+        return new Map(prev).set(id, { ...cur, ...p });
+      });
+      try {
+        const { notes: updated } = await api.patchNote(id, p);
+        mergeNotes(updated);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Не удалось сохранить");
+        void restoreNotes();
+      }
+    },
+    [notes, mergeNotes, toast, restoreNotes],
+  );
+
+  const removeNote = useCallback(
+    async (id: number) => {
+      const doomed = new Set(noteSubtreeIds(notes, id));
+      setNotes((prev) => {
+        const next = new Map<number, Note>();
+        for (const [nid, n] of prev) if (!doomed.has(nid)) next.set(nid, n);
+        return next;
+      });
+      try {
+        await api.deleteNote(id);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Не удалось удалить");
+        void restoreNotes();
+      }
+    },
+    [notes, toast, restoreNotes],
+  );
+
   const value = useMemo<Store>(
     () => ({
       tasks,
@@ -573,6 +656,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createPerson,
       patchPerson,
       removePerson,
+      notes,
+      createNote,
+      patchNote,
+      removeNote,
     }),
     [
       tasks,
@@ -601,6 +688,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createPerson,
       patchPerson,
       removePerson,
+      notes,
+      createNote,
+      patchNote,
+      removeNote,
     ],
   );
 

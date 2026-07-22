@@ -6,6 +6,7 @@ import { WeekView } from "./week/WeekView";
 import { GanttView } from "./gantt/GanttView";
 import { TeamView } from "./team/TeamView";
 import { TypesView } from "./types/TypesView";
+import { NotesView } from "./notes/NotesView";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/gantt" element={<GanttView />} />
             <Route path="/team" element={<TeamView />} />
             <Route path="/types" element={<TypesView />} />
+            <Route path="/notes/:id?" element={<NotesView />} />
             <Route path="*" element={<Navigate to="/projects" replace />} />
           </Routes>
         </Shell>
