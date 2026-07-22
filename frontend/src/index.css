@@ -221,6 +221,24 @@
     margin: 0 auto;
     padding: 0 24px 32px;
   }
+  /* широкие экраны: контент шире и крупнее (zoom стандартизован,
+     координатная математика приводится через uiZoom) */
+  @media (min-width: 1800px) {
+    :root {
+      zoom: 1.12;
+    }
+    .shell {
+      max-width: 1520px;
+    }
+  }
+  @media (min-width: 2400px) {
+    :root {
+      zoom: 1.3;
+    }
+    .shell {
+      max-width: 1760px;
+    }
+  }
   .topbar {
     display: flex;
     align-items: center;

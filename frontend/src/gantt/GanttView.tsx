@@ -10,6 +10,7 @@ import { TaskModal } from "../components/TaskDetails";
 import { TypeBadge } from "../components/TypeBadge";
 import { useTaskFilters } from "../components/TaskFilters";
 import { useData } from "../data/DataProvider";
+import { uiZoom } from "../lib/zoom";
 import {
   childProjects,
   childrenOf,
@@ -203,7 +204,7 @@ export function GanttView() {
   useEffect(() => {
     if (!drag) return;
     const onMove = (e: PointerEvent) => {
-      const delta = Math.round((e.clientX - drag.originX) / DAY_W);
+      const delta = Math.round((e.clientX - drag.originX) / (DAY_W * uiZoom()));
       setDrag((d) => (d && delta !== d.delta ? { ...d, delta } : d));
     };
     const onUp = () => {

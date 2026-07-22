@@ -10,6 +10,7 @@ import {
 import { TaskDetails } from "../components/TaskDetails";
 import { PALETTE, nextColor, type Project } from "../data/types";
 import { getDragTask, hasDragTask, setDragGhost } from "./dnd";
+import { uiZoom } from "../lib/zoom";
 import {
   SELECTED_TASK_KEY,
   TWO_WEEKS_KEY,
@@ -53,8 +54,9 @@ function ColResize({ onDelta }: { onDelta: (dx: number) => void }) {
         e.preventDefault();
         setActive(true);
         let lastX = e.clientX;
+        const z = uiZoom();
         const onMove = (ev: PointerEvent) => {
-          onDelta(ev.clientX - lastX);
+          onDelta((ev.clientX - lastX) / z);
           lastX = ev.clientX;
         };
         const onUp = () => {
