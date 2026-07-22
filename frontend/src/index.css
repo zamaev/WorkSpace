@@ -20,6 +20,8 @@
   --asoft: rgba(201, 169, 106, 0.13);
   --pos: #8fb56b;
   --over: #c9736a;
+  --due-soft: #7d9cc0;
+  --due-warn: #d99a4e;
 }
 [data-theme="light"] {
   --bg: #fbfbfc;
@@ -32,6 +34,8 @@
   --asoft: rgba(154, 122, 60, 0.1);
   --pos: #4f7a2b;
   --over: #a84438;
+  --due-soft: #5b7ca6;
+  --due-warn: #b06f1f;
 }
 
 @theme inline {
@@ -376,10 +380,15 @@
   }
 
   /* дедлайн: красноватый всегда, жёстко-красный при наступлении */
-  .chip-due {
-    background: color-mix(in srgb, var(--over) 10%, transparent);
-    color: color-mix(in srgb, var(--over) 78%, var(--text));
-    border-color: color-mix(in srgb, var(--over) 28%, transparent);
+  .chip-due-soft {
+    background: color-mix(in srgb, var(--due-soft) 10%, transparent);
+    color: color-mix(in srgb, var(--due-soft) 80%, var(--text));
+    border-color: color-mix(in srgb, var(--due-soft) 30%, transparent);
+  }
+  .chip-due-warn {
+    background: color-mix(in srgb, var(--due-warn) 12%, transparent);
+    color: color-mix(in srgb, var(--due-warn) 82%, var(--text));
+    border-color: color-mix(in srgb, var(--due-warn) 32%, transparent);
   }
   .chip-due-hard {
     background: var(--over);
@@ -814,6 +823,20 @@
     z-index: 2;
     touch-action: none;
   }
+  /* полый кружок мягкого дедлайна */
+  .g-softdot {
+    position: absolute;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 2px solid var(--due-warn);
+    background: var(--panel);
+    cursor: grab;
+    z-index: 2;
+    touch-action: none;
+  }
   /* пунктирный хвост от конца работы до дедлайна */
   .g-tail {
     position: absolute;
@@ -823,6 +846,21 @@
     opacity: 0.5;
     z-index: 1;
     pointer-events: none;
+  }
+
+  /* палитра поиска (⌘K) */
+  .palette {
+    position: fixed;
+    top: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(560px, calc(100vw - 32px));
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    z-index: 80;
+    box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.55);
   }
 
   /* палитра в поповере */

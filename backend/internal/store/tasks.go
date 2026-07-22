@@ -26,6 +26,7 @@ type Task struct {
 	Done        bool
 	ScheduledOn *string
 	EndOn       *string
+	SoftDueOn   *string
 	DueOn       *string
 	TypeID      *int64
 	AssigneeID  *int64
@@ -42,6 +43,7 @@ type CreateReq struct {
 	ProjectID   *int64 // обязателен для корня; у ребёнка игнорируется (наследует)
 	ScheduledOn *string
 	EndOn       *string
+	SoftDueOn   *string
 	DueOn       *string
 	TypeID      *int64
 	AssigneeID  *int64
@@ -57,6 +59,8 @@ type UpdateReq struct {
 	ScheduledOn    *string
 	SetEndOn       bool
 	EndOn          *string
+	SetSoftDueOn   bool
+	SoftDueOn      *string
 	SetDueOn       bool
 	DueOn          *string
 	SetParentID    bool
@@ -72,6 +76,20 @@ type UpdateReq struct {
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
+
+// validSoftDue: план ≤ мягкий ≤ жёсткий (каждая пара — если обе даты заданы).
+func validSoftDue(scheduled, soft, due *string) error {
+	if soft == nil {
+		return nil
+	}
+	if scheduled != nil && *soft < *scheduled {
+		return fmt.Errorf("%w: мягкий дедлайн раньше запланированного дня", ErrValidation)
+	}
+	if due != nil && *due < *soft {
+		return fmt.Errorf("%w: жёсткий дедлайн раньше мягкого", ErrValidation)
+	}
+	return nil
+}
 
 func validTitle(s string) error {
 	if len(regexp.MustCompile(`\S`).FindString(s)) == 0 {
@@ -106,6 +124,11 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 			return Task{}, nil, err
 		}
 	}
+	if r.SoftDueOn != nil {
+		if err := validDate(*r.SoftDueOn); err != nil {
+			return Task{}, nil, err
+		}
+	}
 	if r.EndOn != nil {
 		if err := validDate(*r.EndOn); err != nil {
 			return Task{}, nil, err
@@ -119,6 +142,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	}
 	if r.ScheduledOn != nil && r.DueOn != nil && *r.DueOn < *r.ScheduledOn {
 		return Task{}, nil, fmt.Errorf("%w: дедлайн раньше запланированного дня", ErrValidation)
+	}
+	if err := validSoftDue(r.ScheduledOn, r.SoftDueOn, r.DueOn); err != nil {
+		return Task{}, nil, err
 	}
 	tx, err := db.Begin()
 	if err != nil {
@@ -184,9 +210,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 
 	ts := now()
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.EndOn, r.DueOn, r.TypeID, r.AssigneeID, pos, dayPos, ts, ts,
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.EndOn, r.SoftDueOn, r.DueOn, r.TypeID, r.AssigneeID, pos, dayPos, ts, ts,
 	)
 	if err != nil {
 		return Task{}, nil, err
@@ -234,6 +260,11 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			return nil, err
 		}
 	}
+	if r.SetSoftDueOn && r.SoftDueOn != nil {
+		if err := validDate(*r.SoftDueOn); err != nil {
+			return nil, err
+		}
+	}
 	if r.SetEndOn && r.EndOn != nil {
 		if err := validDate(*r.EndOn); err != nil {
 			return nil, err
@@ -266,6 +297,9 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if r.SetDueOn {
 		cur.DueOn = r.DueOn
 	}
+	if r.SetSoftDueOn {
+		cur.SoftDueOn = r.SoftDueOn
+	}
 	if r.SetEndOn {
 		cur.EndOn = r.EndOn
 	}
@@ -297,12 +331,15 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if finalScheduled != nil && cur.DueOn != nil && *cur.DueOn < *finalScheduled {
 		return nil, fmt.Errorf("%w: дедлайн раньше запланированного дня", ErrValidation)
 	}
+	if err := validSoftDue(finalScheduled, cur.SoftDueOn, cur.DueOn); err != nil {
+		return nil, err
+	}
 	if cur.EndOn != nil && finalScheduled != nil && *cur.EndOn < *finalScheduled {
 		return nil, fmt.Errorf("%w: конец работы раньше начала", ErrValidation)
 	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, due_on = ?, type_id = ?, assignee_id = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.DueOn, cur.TypeID, cur.AssigneeID, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -526,13 +563,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

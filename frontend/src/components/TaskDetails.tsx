@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useData } from "../data/DataProvider";
 import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
+import { dueChipClass, duePhase } from "../lib/due";
 import { plural } from "../lib/plural";
 import {
   AvatarDot,
@@ -15,7 +16,7 @@ import {
 } from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
 import { AnchoredPopover } from "./AnchoredPopover";
-import { DatePicker } from "./DatePicker";
+import { DatePicker, DueDatePicker } from "./DatePicker";
 import { TypeBadge } from "./TypeBadge";
 
 type PickerKind = "plan" | "due" | "type" | "assignee" | null;
@@ -78,7 +79,7 @@ export function TaskDetails({
   const today = todayISO();
   const planOverdue =
     task.scheduledOn !== null && !task.done && task.scheduledOn < today;
-  const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < today;
+  const due = duePhase(task.softDueOn, task.dueOn, today);
   const type = task.typeId !== null ? types.get(task.typeId) : undefined;
   const assignee =
     task.assigneeId !== null ? people.get(task.assigneeId) : undefined;
@@ -175,12 +176,16 @@ export function TaskDetails({
         <button
           ref={dueRef}
           type="button"
-          className={`chip flex items-center gap-1.5 ${picker === "due" ? "chip-accent-border" : task.dueOn ? (dueOverdue ? "chip-due-hard" : "chip-due") : ""}`}
+          className={`chip flex items-center gap-1.5 ${picker === "due" ? "chip-accent-border" : due && !task.done ? dueChipClass(due.phase) : ""}`}
           onClick={() => toggle("due")}
-          title="Дедлайн"
+          title="Дедлайн: мягкий и жёсткий"
         >
           <FlagIcon />
-          {task.dueOn ? fmtDayChip(task.dueOn) : "дедлайн"}
+          {task.softDueOn && task.dueOn
+            ? `${fmtDayChip(task.softDueOn)} · ${fmtDayChip(task.dueOn)}`
+            : due
+              ? fmtDayChip(due.date)
+              : "дедлайн"}
         </button>
         <button
           ref={typeRef}
@@ -236,10 +241,10 @@ export function TaskDetails({
       )}
       {picker === "due" && (
         <AnchoredPopover anchorRef={dueRef} onClose={() => setPicker(null)}>
-          <DatePicker
-            value={task.dueOn}
-            title="Дедлайн"
-            onChange={(start) => void patch(task.id, { dueOn: start })}
+          <DueDatePicker
+            soft={task.softDueOn}
+            hard={task.dueOn}
+            onPick={(p) => void patch(task.id, p)}
             onClose={() => setPicker(null)}
           />
         </AnchoredPopover>
