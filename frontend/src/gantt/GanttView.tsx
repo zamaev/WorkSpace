@@ -36,7 +36,8 @@ import {
 
 const OPEN_KEY = "workspace-gantt-open";
 const TCOLLAPSED_KEY = "workspace-gantt-tcollapsed";
-const HIDE_UNDATED_KEY = "workspace-gantt-hide-undated";
+// по умолчанию задачи без дат скрыты; тумблер их показывает
+const SHOW_UNDATED_KEY = "workspace-gantt-show-undated";
 const NAME_W_KEY = "workspace-gantt-namew";
 const NAME_W_MAX = 480;
 // текст задач начинается там же, где текст имени проекта:
@@ -219,9 +220,9 @@ export function GanttView() {
   const [collapsedTasks, setCollapsedTasks] = useState<Set<number>>(() =>
     loadIdSet(TCOLLAPSED_KEY),
   );
-  const [hideUndated, setHideUndated] = useState(() => {
+  const [showUndated, setShowUndated] = useState(() => {
     try {
-      return localStorage.getItem(HIDE_UNDATED_KEY) === "1";
+      return localStorage.getItem(SHOW_UNDATED_KEY) === "1";
     } catch {
       return false;
     }
@@ -253,10 +254,10 @@ export function GanttView() {
     });
   };
 
-  const toggleHideUndated = () => {
-    setHideUndated((v) => {
+  const toggleShowUndated = () => {
+    setShowUndated((v) => {
       try {
-        localStorage.setItem(HIDE_UNDATED_KEY, v ? "0" : "1");
+        localStorage.setItem(SHOW_UNDATED_KEY, v ? "0" : "1");
       } catch {
         // приватный режим — состояние не переживёт перезагрузку
       }
@@ -450,9 +451,9 @@ export function GanttView() {
         <div className="flex gap-2">
           <button
             type="button"
-            className={`seg ${hideUndated ? "seg-on" : ""}`}
-            onClick={toggleHideUndated}
-            title="Скрыть задачи без дат (родитель с датированными потомками остаётся)"
+            className={`seg ${showUndated ? "seg-on" : ""}`}
+            onClick={toggleShowUndated}
+            title="Показывать задачи без дат (по умолчанию скрыты)"
           >
             Без дат
           </button>
@@ -535,7 +536,7 @@ export function GanttView() {
               weekendBg={weekendBg}
               open={open.has(p.id)}
               toggleOpen={() => toggleOpen(p.id)}
-              hideUndated={hideUndated}
+              hideUndated={!showUndated}
               collapsedTasks={collapsedTasks}
               toggleTaskCollapse={toggleTaskCollapse}
               drag={drag}
