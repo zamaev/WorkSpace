@@ -817,12 +817,16 @@ func TestSoftDueInvariants(t *testing.T) {
 func repeatPtr(days ...int) *RepeatRule { return &RepeatRule{Kind: "weekly", Days: days} }
 
 func TestNextOccurrence(t *testing.T) {
-	cases := []struct{ from string; days []int; want string }{
-		{"2030-01-07", []int{1}, "2030-01-14"},       // строго после: тот же пн не считается
-		{"2030-01-07", []int{1, 4}, "2030-01-10"},    // ближайший чт
-		{"2030-01-06", []int{1, 4}, "2030-01-07"},    // с вс на пн
-		{"2030-01-10", []int{1, 4}, "2030-01-14"},    // с чт на пн следующей недели
-		{"2030-01-07", []int{7}, "2030-01-13"},       // воскресенье = 7
+	cases := []struct {
+		from string
+		days []int
+		want string
+	}{
+		{"2030-01-07", []int{1}, "2030-01-14"},    // строго после: тот же пн не считается
+		{"2030-01-07", []int{1, 4}, "2030-01-10"}, // ближайший чт
+		{"2030-01-06", []int{1, 4}, "2030-01-07"}, // с вс на пн
+		{"2030-01-10", []int{1, 4}, "2030-01-14"}, // с чт на пн следующей недели
+		{"2030-01-07", []int{7}, "2030-01-13"},    // воскресенье = 7
 	}
 	for _, c := range cases {
 		if got := nextOccurrence(c.from, c.days); got != c.want {

@@ -48,6 +48,7 @@ export type Task = {
   position: number;
   dayPosition: number | null;
   repeat: RepeatRule | null;
+  seriesId: number | null;
 };
 
 // Частичное обновление; null значим для scheduledOn (снять дату)

@@ -93,6 +93,7 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
     position,
     dayPosition,
     repeat,
+    seriesId,
   } = t;
   return {
     id,
@@ -110,6 +111,7 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
     position,
     dayPosition,
     repeat: repeat ?? null,
+    seriesId: seriesId ?? null,
   };
 }
 

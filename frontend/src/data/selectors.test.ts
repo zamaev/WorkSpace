@@ -25,6 +25,7 @@ function task(p: Partial<Task>): Task {
     endOn: null,
     softDueOn: null,
     repeat: null,
+    seriesId: null,
     dueOn: null,
     typeId: null,
     assigneeId: null,
