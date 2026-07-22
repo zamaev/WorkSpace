@@ -29,6 +29,10 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	// бэкап до открытия и миграций: защищает и от кривой миграции
+	if err := store.BackupDB(dbPath, 10); err != nil {
+		log.Warn("бэкап базы не удался", "err", err)
+	}
 	db, err := store.Open(dbPath)
 	if err != nil {
 		log.Error("открытие базы", "path", dbPath, "err", err)

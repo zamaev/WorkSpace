@@ -286,15 +286,16 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		var b struct {
-			Name   Opt[string] `json:"name"`
-			Color  Opt[string] `json:"color"`
-			RoleID Opt[int64]  `json:"roleId"`
+			Name     Opt[string] `json:"name"`
+			Color    Opt[string] `json:"color"`
+			RoleID   Opt[int64]  `json:"roleId"`
+			Position Opt[int]    `json:"position"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		upd := store.PersonUpdate{Name: b.Name.Val, Color: b.Color.Val}
+		upd := store.PersonUpdate{Name: b.Name.Val, Color: b.Color.Val, Position: b.Position.Val}
 		if b.RoleID.Set {
 			upd.SetRoleID, upd.RoleID = true, b.RoleID.Val
 		}
@@ -355,13 +356,14 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		var b struct {
-			Name string `json:"name"`
+			Name     Opt[string] `json:"name"`
+			Position Opt[int]    `json:"position"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		rl, err := store.UpdateRole(db, id, b.Name)
+		rl, err := store.UpdateRole(db, id, store.RoleUpdate{Name: b.Name.Val, Position: b.Position.Val})
 		if err != nil {
 			writeErr(w, err)
 			return

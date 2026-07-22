@@ -169,6 +169,7 @@ type PersonUpdate struct {
 	Color     *string
 	SetRoleID bool
 	RoleID    *int64
+	Position  *int
 }
 
 func UpdatePerson(db *sql.DB, id int64, r PersonUpdate) (Person, error) {
@@ -198,6 +199,11 @@ func UpdatePerson(db *sql.DB, id int64, r PersonUpdate) (Person, error) {
 	}
 	if _, err := db.Exec(`UPDATE people SET name = ?, color = ?, role_id = ?, updated_at = ? WHERE id = ?`, cur.Name, cur.Color, cur.RoleID, now(), id); err != nil {
 		return Person{}, err
+	}
+	if r.Position != nil {
+		if err := reorderRef(db, "people", id, *r.Position); err != nil {
+			return Person{}, err
+		}
 	}
 	return loadPerson(db, id)
 }
@@ -290,18 +296,57 @@ func ListRoles(db *sql.DB) ([]Role, error) {
 	return out, rows.Err()
 }
 
-func UpdateRole(db *sql.DB, id int64, name string) (Role, error) {
-	if err := validTitle(name); err != nil {
-		return Role{}, fmt.Errorf("%w: имя роли не может быть пустым", ErrValidation)
-	}
-	res, err := db.Exec(`UPDATE roles SET name = ?, updated_at = ? WHERE id = ?`, name, now(), id)
+type RoleUpdate struct {
+	Name     *string
+	Position *int
+}
+
+func UpdateRole(db *sql.DB, id int64, r RoleUpdate) (Role, error) {
+	cur, err := loadRole(db, id)
 	if err != nil {
 		return Role{}, err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return Role{}, ErrNotFound
+	if r.Name != nil {
+		if err := validTitle(*r.Name); err != nil {
+			return Role{}, fmt.Errorf("%w: имя роли не может быть пустым", ErrValidation)
+		}
+		cur.Name = *r.Name
+	}
+	if _, err := db.Exec(`UPDATE roles SET name = ?, updated_at = ? WHERE id = ?`, cur.Name, now(), id); err != nil {
+		return Role{}, err
+	}
+	if r.Position != nil {
+		if err := reorderRef(db, "roles", id, *r.Position); err != nil {
+			return Role{}, err
+		}
 	}
 	return loadRole(db, id)
+}
+
+// reorderRef вставляет запись справочника на позицию и плотно
+// перенумеровывает весь список (у справочников один scope).
+func reorderRef(db *sql.DB, table string, id int64, at int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query(`SELECT id FROM `+table+` WHERE id != ? ORDER BY position, id`, id)
+	if err != nil {
+		return err
+	}
+	others, err := scanIDs(rows)
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	list := insertAt(others, id, clamp(at, 0, len(others)))
+	for i, rid := range list {
+		if _, err := tx.Exec(`UPDATE `+table+` SET position = ?, updated_at = ? WHERE id = ? AND position != ?`, i, now(), rid, i); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // DeleteRole снимает роль с людей и удаляет её.

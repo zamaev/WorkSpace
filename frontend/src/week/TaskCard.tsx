@@ -4,7 +4,7 @@ import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
 import { breadcrumb } from "../data/selectors";
 import type { Task } from "../data/types";
-import { setDragTask } from "../tree/dnd";
+import { setDragGhost, setDragTask } from "../tree/dnd";
 import { dayDiff, fmtDayChip, todayISO } from "../lib/dates";
 
 // Карточка задачи в колонке дня. dropBefore приходит от DayColumn —
@@ -32,7 +32,10 @@ export function TaskCard({
       className={`task-card ${task.done ? "task-card-done" : ""} ${dropBefore ? "card-drop-before" : ""}`}
       style={{ borderLeft: `3px solid ${color}` }}
       draggable
-      onDragStart={(e) => setDragTask(e, task.id)}
+      onDragStart={(e) => {
+        setDragTask(e, task.id);
+        setDragGhost(e, e.currentTarget as HTMLElement);
+      }}
       onDragOver={onCardDragOver}
       onDrop={onCardDrop}
     >

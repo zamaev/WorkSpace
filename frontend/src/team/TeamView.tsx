@@ -4,6 +4,7 @@ import { ConfirmButton } from "../components/ConfirmButton";
 import { useData } from "../data/DataProvider";
 import { PALETTE, nextColor, type Person, type Role } from "../data/types";
 import { plural } from "../lib/plural";
+import { setDragGhost } from "../tree/dnd";
 
 // Раздел «Команда»: люди, которых можно назначать исполнителями.
 export function TeamView() {
@@ -37,7 +38,12 @@ export function TeamView() {
           </p>
         )}
         {list.map((p) => (
-          <PersonRow key={p.id} person={p} taskCount={[...tasks.values()].filter((t) => t.assigneeId === p.id).length} />
+          <PersonRow
+            key={p.id}
+            person={p}
+            list={list}
+            taskCount={[...tasks.values()].filter((t) => t.assigneeId === p.id).length}
+          />
         ))}
         <div className="prow prow-tight !border-b-0">
           <AvatarDot name={draft || "?"} color="var(--check)" size={26} />
@@ -82,7 +88,14 @@ function RolesPanel() {
         <p className="px-2 py-2 text-[13px] text-dim">Например «Backend», «QA», «Дизайн» — потом назначь людям.</p>
       )}
       {list.map((r) => (
-        <RoleRow key={r.id} role={r} count={[...people.values()].filter((p) => p.roleId === r.id).length} patchRole={patchRole} removeRole={removeRole} />
+        <RoleRow
+          key={r.id}
+          role={r}
+          list={list}
+          count={[...people.values()].filter((p) => p.roleId === r.id).length}
+          patchRole={patchRole}
+          removeRole={removeRole}
+        />
       ))}
       <div className="prow prow-tight !border-b-0">
         <span className="w-[26px] text-center flex-none" aria-hidden="true">＋</span>
@@ -108,27 +121,54 @@ function RolesPanel() {
 
 function RoleRow({
   role,
+  list,
   count,
   patchRole,
   removeRole,
 }: {
   role: Role;
+  list: Role[];
   count: number;
-  patchRole: (id: number, name: string) => Promise<void>;
+  patchRole: (id: number, p: { name?: string; position?: number }) => Promise<void>;
   removeRole: (id: number) => Promise<void>;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(role.name);
+  const [dropZone, setDropZone] = useState<"before" | "after" | null>(null);
 
   const finish = (v: string) => {
     setRenaming(false);
     const t = v.trim();
-    if (t && t !== role.name) void patchRole(role.id, t);
+    if (t && t !== role.name) void patchRole(role.id, { name: t });
     else setName(role.name);
   };
 
   return (
-    <div className="prow prow-tight">
+    <div
+      className={`prow prow-tight relative ${dropZone === "before" ? "drop-before" : dropZone === "after" ? "drop-after" : ""}`}
+      draggable={!renaming}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-workspace-role", String(role.id));
+        setDragGhost(e, e.currentTarget as HTMLElement);
+      }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("application/x-workspace-role")) return;
+        e.preventDefault();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setDropZone(e.clientY - r.top < r.height / 2 ? "before" : "after");
+      }}
+      onDragLeave={() => setDropZone(null)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const zone = dropZone;
+        setDropZone(null);
+        const dragId = Number(e.dataTransfer.getData("application/x-workspace-role"));
+        if (!Number.isFinite(dragId) || dragId === role.id) return;
+        const others = list.filter((x) => x.id !== dragId);
+        const idx = others.findIndex((x) => x.id === role.id);
+        void patchRole(dragId, { position: zone === "before" ? idx : idx + 1 });
+      }}
+    >
       {renaming ? (
         <input
           className="ghost-input flex-1 text-[13.5px]"
@@ -165,8 +205,17 @@ function RoleRow({
   );
 }
 
-function PersonRow({ person, taskCount }: { person: Person; taskCount: number }) {
+function PersonRow({
+  person,
+  list,
+  taskCount,
+}: {
+  person: Person;
+  list: Person[];
+  taskCount: number;
+}) {
   const { roles, patchPerson, removePerson } = useData();
+  const [dropZone, setDropZone] = useState<"before" | "after" | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(person.name);
   const [picker, setPicker] = useState(false);
@@ -214,7 +263,31 @@ function PersonRow({ person, taskCount }: { person: Person; taskCount: number })
   };
 
   return (
-    <div className="prow">
+    <div
+      className={`prow relative ${dropZone === "before" ? "drop-before" : dropZone === "after" ? "drop-after" : ""}`}
+      draggable={!renaming}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-workspace-person", String(person.id));
+        setDragGhost(e, e.currentTarget as HTMLElement);
+      }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("application/x-workspace-person")) return;
+        e.preventDefault();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setDropZone(e.clientY - r.top < r.height / 2 ? "before" : "after");
+      }}
+      onDragLeave={() => setDropZone(null)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const zone = dropZone;
+        setDropZone(null);
+        const dragId = Number(e.dataTransfer.getData("application/x-workspace-person"));
+        if (!Number.isFinite(dragId) || dragId === person.id) return;
+        const others = list.filter((x) => x.id !== dragId);
+        const idx = others.findIndex((x) => x.id === person.id);
+        void patchPerson(dragId, { position: zone === "before" ? idx : idx + 1 });
+      }}
+    >
       <div className="relative flex items-center" ref={pickerRef}>
         <button type="button" title="Цвет" aria-label={`Цвет — ${person.name}`} onClick={() => setPicker((v) => !v)}>
           <AvatarDot name={person.name} color={person.color} size={26} />

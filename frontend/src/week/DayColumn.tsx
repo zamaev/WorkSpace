@@ -3,7 +3,7 @@ import { Check, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import { flattenActiveProjects, isTaskVisible, spanTasksOn, tasksOn } from "../data/selectors";
 import { addDays, dayDiff, fmtDayHeader, todayISO } from "../lib/dates";
-import { getDragTask, hasDragTask, setDragTask } from "../tree/dnd";
+import { getDragTask, hasDragTask, setDragGhost, setDragTask } from "../tree/dnd";
 import { TaskCard } from "./TaskCard";
 
 export function DayColumn({
@@ -11,11 +11,13 @@ export function DayColumn({
   quickProject,
   onQuickProject,
   onOpen,
+  matches,
 }: {
   day: string;
   quickProject: number | null;
   onQuickProject: (id: number) => void;
   onOpen: (id: number) => void;
+  matches: (t: import("../data/types").Task) => boolean;
 }) {
   const { tasks, projects, create, patch } = useData();
   const [colDrop, setColDrop] = useState(false);
@@ -25,8 +27,8 @@ export function DayColumn({
   const [picker, setPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const list = tasksOn(tasks, day).filter((t) => isTaskVisible(projects, t));
-  const spans = spanTasksOn(tasks, day).filter((t) => isTaskVisible(projects, t));
+  const list = tasksOn(tasks, day).filter((t) => isTaskVisible(projects, t) && matches(t));
+  const spans = spanTasksOn(tasks, day).filter((t) => isTaskVisible(projects, t) && matches(t));
   const isToday = day === todayISO();
   const project = quickProject !== null ? projects.get(quickProject) : undefined;
 
@@ -203,7 +205,14 @@ function SpanCard({ task, day, onOpen }: { task: import("../data/types").Task; d
   const k = dayDiff(task.scheduledOn!, day) + 1;
   const n = dayDiff(task.scheduledOn!, task.endOn!) + 1;
   return (
-    <div className="span-card" draggable onDragStart={(e) => setDragTask(e, task.id)}>
+    <div
+      className="span-card"
+      draggable
+      onDragStart={(e) => {
+        setDragTask(e, task.id);
+        setDragGhost(e, e.currentTarget as HTMLElement);
+      }}
+    >
       <Check
         size="sm"
         done={task.done}

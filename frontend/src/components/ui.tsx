@@ -81,3 +81,13 @@ export function AvatarDot({ name, color, size = 18 }: { name: string; color: str
     </span>
   );
 }
+
+// Календарик для чипа плана.
+export function CalendarIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="11" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M1.5 5.5h11M4.5 1v3M9.5 1v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}

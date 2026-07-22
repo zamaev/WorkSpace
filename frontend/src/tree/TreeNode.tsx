@@ -6,7 +6,7 @@ import { useData } from "../data/DataProvider";
 import { childrenOf, childStats, subtreeIds } from "../data/selectors";
 import type { Task } from "../data/types";
 import { fmtDayChip, todayISO } from "../lib/dates";
-import { getDragTask, hasDragTask, setDragTask } from "./dnd";
+import { getDragTask, hasDragTask, setDragGhost, setDragTask } from "./dnd";
 
 type DropZone = "before" | "into" | "after" | null;
 
@@ -19,6 +19,7 @@ export function TreeNode({
   flashId,
   selectedId,
   onSelect,
+  hideDone = false,
 }: {
   task: Task;
   depth: number;
@@ -28,6 +29,7 @@ export function TreeNode({
   flashId: number | null;
   selectedId: number | null;
   onSelect: (id: number) => void;
+  hideDone?: boolean;
 }) {
   const { tasks, types, people, create, patch } = useData();
   const [renaming, setRenaming] = useState(false);
@@ -37,7 +39,7 @@ export function TreeNode({
   const [zone, setZone] = useState<DropZone>(null);
   const rowRef = useRef<HTMLDivElement>(null);
 
-  const children = childrenOf(tasks, task.id);
+  const children = childrenOf(tasks, task.id).filter((c) => !hideDone || !c.done);
   const stats = childStats(tasks, task.id);
   const open = isOpen(task.id);
   const today = todayISO();
@@ -97,7 +99,10 @@ export function TreeNode({
         style={{ marginLeft: depth * 22 }}
         draggable={!renaming}
         onClick={() => onSelect(task.id)}
-        onDragStart={(e) => setDragTask(e, task.id)}
+        onDragStart={(e) => {
+          setDragTask(e, task.id);
+          setDragGhost(e, e.currentTarget as HTMLElement);
+        }}
         onDragOver={(e) => {
           if (!hasDragTask(e)) return;
           if (!canAccept(null)) return;
@@ -175,8 +180,7 @@ export function TreeNode({
               endValue={task.endOn}
               title="План"
               allowRange
-              onPickEnd={(iso) => void patch(task.id, { endOn: iso })}
-              onPick={(iso) => void patch(task.id, { scheduledOn: iso })}
+              onChange={(start, end) => void patch(task.id, { scheduledOn: start, endOn: end })}
               onClose={() => setDateMenu(false)}
             />
           )}
@@ -199,7 +203,7 @@ export function TreeNode({
             <DatePickerPopover
               value={task.dueOn}
               title="Дедлайн"
-              onPick={(iso) => void patch(task.id, { dueOn: iso })}
+              onChange={(start) => void patch(task.id, { dueOn: start })}
               onClose={() => setDueMenu(false)}
             />
           )}
@@ -232,6 +236,7 @@ export function TreeNode({
             flashId={flashId}
             selectedId={selectedId}
             onSelect={onSelect}
+            hideDone={hideDone}
           />
         ))}
 

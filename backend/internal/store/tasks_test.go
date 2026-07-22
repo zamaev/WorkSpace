@@ -689,7 +689,7 @@ func TestRolesAndMembers(t *testing.T) {
 	if people[0].RoleID == nil || *people[0].RoleID != role.ID {
 		t.Errorf("роль не назначилась: %+v", people[0])
 	}
-	if _, err := UpdateRole(e.db, role.ID, "Бэкенд"); err != nil {
+	if _, err := UpdateRole(e.db, role.ID, RoleUpdate{Name: new("Бэкенд")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := DeleteRole(e.db, role.ID); err != nil {
@@ -739,5 +739,32 @@ func TestRolesAndMembers(t *testing.T) {
 	types, _ := ListTypes(e.db)
 	if types[0].Emoji != "📞" {
 		t.Errorf("emoji не обновился: %+v", types[0])
+	}
+}
+
+func TestRefReorder(t *testing.T) {
+	e := openTest(t)
+	a, _ := CreatePerson(e.db, "А", "#8fb56b")
+	b, _ := CreatePerson(e.db, "Б", "#6a9bc9")
+	c, _ := CreatePerson(e.db, "В", "#c9736a")
+	_ = a
+	_ = b
+	// В → на позицию 0
+	if _, err := UpdatePerson(e.db, c.ID, PersonUpdate{Position: new(0)}); err != nil {
+		t.Fatal(err)
+	}
+	people, _ := ListPeople(e.db)
+	if people[0].ID != c.ID || people[1].Position != 1 || people[2].Position != 2 {
+		t.Errorf("порядок людей: %+v", people)
+	}
+
+	r1, _ := CreateRole(e.db, "X")
+	r2, _ := CreateRole(e.db, "Y")
+	if _, err := UpdateRole(e.db, r2.ID, RoleUpdate{Position: new(0)}); err != nil {
+		t.Fatal(err)
+	}
+	roles, _ := ListRoles(e.db)
+	if roles[0].ID != r2.ID || roles[1].ID != r1.ID {
+		t.Errorf("порядок ролей: %+v", roles)
 	}
 }

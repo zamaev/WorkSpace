@@ -4,6 +4,7 @@ import { ConfirmButton } from "../components/ConfirmButton";
 import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
 import { plural } from "../lib/plural";
+import { lastGrapheme } from "../lib/emoji";
 import type { TaskType } from "../data/types";
 
 const EMOJI_PRESETS = ["💻", "🧪", "🤝", "📞", "📝", "🐛", "🎨", "🚀", "🔧", "📊"];
@@ -81,6 +82,12 @@ function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
   const [custom, setCustom] = useState("");
   const pickerRef = useRef<HTMLDivElement>(null);
 
+  // при открытии показываем текущий не-пресетный смайл в поле
+  useEffect(() => {
+    if (picker) setCustom(EMOJI_PRESETS.includes(type.emoji) ? "" : type.emoji);
+  }, [picker, type.emoji]);
+
+
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: MouseEvent) => {
@@ -140,18 +147,16 @@ function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
                 name="custom-emoji"
                 aria-label="Свой смайлик"
                 placeholder="🙂"
-                maxLength={4}
                 value={custom}
-                onChange={(e) => setCustom(e.target.value)}
+                onChange={(e) => setCustom(lastGrapheme(e.target.value))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && custom.trim()) {
                     void patchType(type.id, { emoji: custom.trim() });
-                    setCustom("");
                     setPicker(false);
                   }
                 }}
               />
-              <span className="mmeta">свой · ⌃⌘Space</span>
+              <span className="mmeta">свой</span>
               {type.emoji && (
                 <button
                   type="button"

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { MLabel, SBar } from "../components/ui";
 import { TaskModal } from "../components/TaskDetails";
 import { TypeBadge } from "../components/TypeBadge";
+import { useTaskFilters } from "../components/TaskFilters";
 import { useData } from "../data/DataProvider";
 import { childProjects, childrenOf, projectUndone, rootTasks } from "../data/selectors";
 import type { Project, Task } from "../data/types";
@@ -98,6 +99,7 @@ export function GanttView() {
   const [open, setOpen] = useState<Set<number>>(loadOpen);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [modalTask, setModalTask] = useState<number | null>(null);
+  const { matches, bar: filterBar } = useTaskFilters();
   const [showArchived, setShowArchived] = useState(() => {
     try {
       return localStorage.getItem(ARCHIVE_KEY) === "1";
@@ -245,8 +247,9 @@ export function GanttView() {
 
   return (
     <div>
-      <div className="flex items-center justify-between pb-4">
+      <div className="flex items-center justify-between gap-4 pb-4 flex-wrap">
         <h1 className="text-[17px] font-semibold m-0">Гант</h1>
+        {filterBar}
         <div className="flex gap-2">
           <button type="button" className={`seg ${showArchived ? "seg-on" : ""}`} onClick={toggleArchived} title="Показывать архивные проекты">
             Архив
@@ -308,6 +311,7 @@ export function GanttView() {
               undone={projectUndone(tasks, projects, p.id)}
               onSetDates={() => void patchProject(p.id, { startOn: today, dueOn: addDays(today, 13) })}
               onOpenTask={setModalTask}
+              taskFilter={matches}
             />
           ))}
 
@@ -359,6 +363,7 @@ function ProjectRows({
   undone,
   onSetDates,
   onOpenTask,
+  taskFilter,
 }: {
   project: Project;
   depth: number;
@@ -373,6 +378,7 @@ function ProjectRows({
   undone: number;
   onSetDates: () => void;
   onOpenTask: (id: number) => void;
+  taskFilter: (t: Task) => boolean;
 }) {
   const { types } = useData();
   const { start, end } = applyDrag(project.startOn, project.dueOn, drag, "project", project.id);
@@ -382,7 +388,9 @@ function ProjectRows({
     const walk = (parentId: number | null, depth: number) => {
       const children = parentId === null ? rootTasks(tasks, project.id) : childrenOf(tasks, parentId);
       for (const t of children) {
-        flat.push({ task: t, depth });
+        if (taskFilter(t)) flat.push({ task: t, depth });
+        // потомки проверяются независимо: отфильтрованный родитель не
+        // прячет подходящих детей
         walk(t.id, depth + 1);
       }
     };

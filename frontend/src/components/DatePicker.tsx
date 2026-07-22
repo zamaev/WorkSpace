@@ -1,14 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  addDays,
-  addMonths,
-  firstOfMonth,
-  fmtDayChip,
-  fmtMonthTitle,
-  mondayOf,
-  monthCells,
-  todayISO,
-} from "../lib/dates";
+import { addMonths, firstOfMonth, fmtDayChip, fmtMonthTitle, monthCells, todayISO } from "../lib/dates";
 import { MLabel } from "./ui";
 
 // Свой календарь в языке space: чипы «Сегодня · Завтра · Пн», сетка месяца,
@@ -19,16 +10,17 @@ export function DatePicker({
   endValue,
   title = "Дата",
   allowRange = false,
-  onPick,
-  onPickEnd,
+  onChange,
   onClose,
 }: {
   value: string | null;
   endValue?: string | null;
   title?: string;
   allowRange?: boolean;
-  onPick: (iso: string | null) => void;
-  onPickEnd?: (iso: string | null) => void;
+  // единый колбэк: изменения начала и конца всегда приходят вместе,
+  // чтобы вызывающий отправил ОДИН запрос (иначе между двумя PATCH
+  // нарушается серверный инвариант end >= start)
+  onChange: (start: string | null, end: string | null) => void;
   onClose: () => void;
 }) {
   const today = todayISO();
@@ -37,26 +29,21 @@ export function DatePicker({
   const [pendingStart, setPendingStart] = useState<string | null>(null);
 
   const pickDay = (iso: string) => {
-    if (allowRange && rangeMode && onPickEnd) {
-      // диапазон: первый клик — начало (старый конец сбрасывается),
-      // второй — конец; клик раньше начала переносит начало
+    if (allowRange && rangeMode) {
+      // диапазон: первый клик — начало (только превью), второй — конец;
+      // клик раньше начала переносит начало
       if (pendingStart === null || iso < pendingStart) {
         setPendingStart(iso);
-        onPick(iso);
-        onPickEnd(null);
         return;
       }
-      onPickEnd(iso);
+      onChange(pendingStart, iso);
       setPendingStart(null);
       onClose();
       return;
     }
-    onPick(iso);
-    if (endValue != null && onPickEnd) onPickEnd(null);
+    onChange(iso, null);
     onClose();
   };
-
-  const nextMonday = addDays(mondayOf(today), 7);
 
   return (
     <div>
@@ -84,17 +71,6 @@ export function DatePicker({
             </button>
           </div>
         )}
-        <div className="flex gap-1.5">
-          <button type="button" className="chip" onClick={() => pickDay(today)}>
-            Сегодня
-          </button>
-          <button type="button" className="chip" onClick={() => pickDay(addDays(today, 1))}>
-            Завтра
-          </button>
-          <button type="button" className="chip" title={`Следующий понедельник — ${fmtDayChip(nextMonday)}`} onClick={() => pickDay(nextMonday)}>
-            Пн
-          </button>
-        </div>
       </div>
 
       <div className="flex items-center justify-between pb-1.5">
@@ -140,7 +116,7 @@ export function DatePicker({
             type="button"
             className="mmeta !text-over"
             onClick={() => {
-              onPick(null);
+              onChange(null, null);
               onClose();
             }}
           >
