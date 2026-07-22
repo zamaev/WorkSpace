@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, fmtDayChip, fmtDayHeader, fmtMonthTitle, fmtWeekRange, mondayOf, monthCells, weekDays } from "./dates";
+import {
+  addDays,
+  addMonths,
+  fmtDayChip,
+  fmtDayHeader,
+  fmtMonthTitle,
+  fmtWeekRange,
+  mondayOf,
+  monthCells,
+  weekDays,
+} from "./dates";
 
 describe("mondayOf", () => {
   it("будни и воскресенье схлопываются в один понедельник", () => {

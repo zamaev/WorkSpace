@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { uiZoom } from "../lib/zoom";
 
@@ -29,10 +36,12 @@ export function AnchoredPopover({
     const p = pop.getBoundingClientRect();
     let left = a.left;
     let top = a.bottom + 6;
-    if (left + p.width > window.innerWidth - 12) left = window.innerWidth - p.width - 12;
+    if (left + p.width > window.innerWidth - 12)
+      left = window.innerWidth - p.width - 12;
     if (left < 12) left = 12;
     // не влезает вниз — открываем вверх
-    if (top + p.height > window.innerHeight - 12) top = Math.max(12, a.top - p.height - 6);
+    if (top + p.height > window.innerHeight - 12)
+      top = Math.max(12, a.top - p.height - 6);
     setPos({ top: top / z, left: left / z });
   }, [anchorRef]);
 
@@ -61,7 +70,13 @@ export function AnchoredPopover({
     <div
       ref={ref}
       className="popover !w-max"
-      style={{ position: "fixed", top: pos?.top ?? -9999, left: pos?.left ?? -9999, right: "auto", zIndex: 70 }}
+      style={{
+        position: "fixed",
+        top: pos?.top ?? -9999,
+        left: pos?.left ?? -9999,
+        right: "auto",
+        zIndex: 70,
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {children}

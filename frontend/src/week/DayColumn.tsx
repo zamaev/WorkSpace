@@ -41,17 +41,21 @@ export function DayColumn({
   const list = tasksOn(tasks, day).filter(
     (t) => isTaskVisible(projects, t) && matches(t),
   );
+  const today = todayISO();
   const ghosts = [...tasks.values()].filter(
     (t) =>
       t.repeat &&
       isTaskVisible(projects, t) &&
       matches(t) &&
-      ghostOccurrences(t, day, day).length > 0,
+      ghostOccurrences(t, day, day, today).length > 0 &&
+      // день занят живым вхождением той же серии (разовый перенос) —
+      // призрак был бы дублем реальной карточки
+      !list.some((x) => x.seriesId !== null && x.seriesId === t.seriesId),
   );
   const spans = spanTasksOn(tasks, day).filter(
     (t) => isTaskVisible(projects, t) && matches(t),
   );
-  const isToday = day === todayISO();
+  const isToday = day === today;
   const project =
     quickProject !== null ? projects.get(quickProject) : undefined;
 
@@ -86,8 +90,8 @@ export function DayColumn({
     const t = tasks.get(id);
     if (!t) return;
     if (t.scheduledOn === day) {
-      // перенос в конец своего же дня
-      const rest = list.filter((x) => x.id !== id);
+      // перенос в конец своего же дня — по полному списку дня
+      const rest = tasksOn(tasks, day).filter((x) => x.id !== id);
       void patch(id, { dayPosition: rest.length });
       return;
     }
@@ -107,7 +111,9 @@ export function DayColumn({
     clearDrop();
     const id = getDragTask(e);
     if (id === null || id === target) return;
-    const rest = list.filter((x) => x.id !== id);
+    // индекс вставки — в ПОЛНОМ списке дня (сервер клампит по нему, а в
+    // видимом подмножестве скрытые фильтром/архивом задачи смещали бы цель)
+    const rest = tasksOn(tasks, day).filter((x) => x.id !== id);
     const idx = rest.findIndex((x) => x.id === target);
     if (idx === -1) return;
     const t = tasks.get(id);

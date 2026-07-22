@@ -205,32 +205,46 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [mergeTasks, toast],
   );
 
+  // при ошибке мутации не откатываем снапшотом (он затёр бы параллельно
+  // завершившиеся мутации) — перечитываем правду с сервера
+  const restoreTasks = useCallback(async () => {
+    try {
+      const { tasks: fresh } = await api.fetchTasks();
+      setTasks(new Map(fresh.map((t) => [t.id, stripTask(t)])));
+    } catch {
+      // сервер недоступен — состояние поправит следующий успешный запрос
+    }
+  }, []);
+
   const patch = useCallback(
     async (id: number, p: TaskPatch) => {
-      const snapshot = tasks;
-      const cur = tasks.get(id);
-      if (!cur) return;
+      if (!tasks.has(id)) return;
       // локально применяем только собственные поля задачи; каскады и позиции
       // сиблингов придут из ответа
       setTasks((prev) => {
+        const cur = prev.get(id);
+        if (!cur) return prev;
         const next = new Map(prev);
-        next.set(id, { ...cur, ...p });
+        const optimistic = { ...cur, ...p };
+        // зеркалим серверный каскад: без плана не бывает диапазона —
+        // иначе оптимистичный рендер видит противоречивое состояние
+        if (p.scheduledOn === null) optimistic.endOn = null;
+        next.set(id, optimistic);
         return next;
       });
       try {
         const { tasks: updated } = await api.patchTask(id, p);
         mergeTasks(updated);
       } catch (e) {
-        setTasks(snapshot);
         toast(e instanceof Error ? e.message : "Не удалось сохранить");
+        void restoreTasks();
       }
     },
-    [tasks, mergeTasks, toast],
+    [tasks, mergeTasks, toast, restoreTasks],
   );
 
   const remove = useCallback(
     async (id: number) => {
-      const snapshot = tasks;
       const doomed = new Set(subtreeIds(tasks, id));
       setTasks((prev) => {
         const next = new Map<number, Task>();
@@ -242,11 +256,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         await api.deleteTask(id);
       } catch (e) {
-        setTasks(snapshot);
         toast(e instanceof Error ? e.message : "Не удалось удалить");
+        void restoreTasks();
       }
     },
-    [tasks, toast],
+    [tasks, toast, restoreTasks],
   );
 
   const createProject = useCallback(
@@ -394,14 +408,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         const { role } = await api.patchRole(id, p);
         setRoles((prev) => new Map(prev).set(id, role));
-        // перестановка меняет позиции соседей — перечитываем список
-        if (p.position !== undefined) {
-          const { roles: fresh } = await api.fetchRoles();
-          setRoles(new Map(fresh.map((r) => [r.id, r])));
-        }
       } catch (e) {
         setRoles(snapshot);
         toast(e instanceof Error ? e.message : "Не удалось сохранить роль");
+        return;
+      }
+      // перестановка меняет позиции соседей — перечитываем список; сбой
+      // догрузки НЕ откатывает уже применённый на сервере PATCH
+      if (p.position !== undefined) {
+        try {
+          const { roles: fresh } = await api.fetchRoles();
+          setRoles(new Map(fresh.map((r) => [r.id, r])));
+        } catch {
+          // порядок соседей подтянется при следующей загрузке
+        }
       }
     },
     [roles, toast],
@@ -481,13 +501,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         const { person } = await api.patchPerson(id, p);
         setPeople((prev) => new Map(prev).set(id, person));
-        if (p.position !== undefined) {
-          const { people: fresh } = await api.fetchPeople();
-          setPeople(new Map(fresh.map((x) => [x.id, x])));
-        }
       } catch (e) {
         setPeople(snapshot);
         toast(e instanceof Error ? e.message : "Не удалось сохранить");
+        return;
+      }
+      if (p.position !== undefined) {
+        try {
+          const { people: fresh } = await api.fetchPeople();
+          setPeople(new Map(fresh.map((x) => [x.id, x])));
+        } catch {
+          // порядок соседей подтянется при следующей загрузке
+        }
       }
     },
     [people, toast],

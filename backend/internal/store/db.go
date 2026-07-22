@@ -16,7 +16,10 @@ var migrationsFS embed.FS
 // Open открывает (создавая при необходимости) базу и доводит схему до
 // актуальной версии. Путь ":memory:" даёт чистую in-memory базу для тестов.
 func Open(path string) (*sql.DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)", path)
+	// _txlock=immediate: транзакции сразу берут write-lock — deferred
+	// read->write апгрейд не ждёт busy_timeout и падал бы SQLITE_BUSY
+	// при конкурентных мутациях
+	dsn := fmt.Sprintf("file:%s?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)", path)
 	if path == ":memory:" {
 		// in-memory база живёт в одном соединении — пул из нескольких дал бы
 		// каждому соединению свою пустую базу

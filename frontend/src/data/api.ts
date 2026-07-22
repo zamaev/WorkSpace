@@ -17,6 +17,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(path, {
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15000),
       ...init,
     });
   } catch {

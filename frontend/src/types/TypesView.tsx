@@ -7,7 +7,18 @@ import { plural } from "../lib/plural";
 import { lastGrapheme } from "../lib/emoji";
 import type { TaskType } from "../data/types";
 
-const EMOJI_PRESETS = ["💻", "🧪", "🤝", "📞", "📝", "🐛", "🎨", "🚀", "🔧", "📊"];
+const EMOJI_PRESETS = [
+  "💻",
+  "🧪",
+  "🤝",
+  "📞",
+  "📝",
+  "🐛",
+  "🎨",
+  "🚀",
+  "🔧",
+  "📊",
+];
 
 // Раздел «Типы»: справочник типов задач с эмодзи.
 export function TypesView() {
@@ -29,7 +40,9 @@ export function TypesView() {
     );
   }
 
-  const list = [...types.values()].sort((a, b) => a.position - b.position || a.id - b.id);
+  const list = [...types.values()].sort(
+    (a, b) => a.position - b.position || a.id - b.id,
+  );
 
   return (
     <div className="max-w-[560px]">
@@ -37,14 +50,24 @@ export function TypesView() {
         <MLabel className="px-2 pb-2">Типы задач</MLabel>
         {list.length === 0 && (
           <p className="px-2 py-2 text-[13px] text-dim">
-            Пока пусто. Типы («разработка», «встреча», «qa»…) помечают задачи смайликом во всех видах.
+            Пока пусто. Типы («разработка», «встреча», «qa»…) помечают задачи
+            смайликом во всех видах.
           </p>
         )}
         {list.map((t) => (
-          <TypeRow key={t.id} type={t} taskCount={[...tasks.values()].filter((x) => x.typeId === t.id).length} />
+          <TypeRow
+            key={t.id}
+            type={t}
+            taskCount={
+              [...tasks.values()].filter((x) => x.typeId === t.id).length
+            }
+          />
         ))}
         <div className="prow prow-tight !border-b-0">
-          <span className="w-[26px] text-center text-[15px] flex-none" aria-hidden="true">
+          <span
+            className="w-[26px] text-center text-[15px] flex-none"
+            aria-hidden="true"
+          >
             ＋
           </span>
           <input
@@ -68,7 +91,8 @@ export function TypesView() {
         </div>
       </div>
       <p className="pt-3 text-[12px] text-dim">
-        Клик по смайлику — выбор из набора или любой свой (панель эмодзи macOS: ⌃⌘Space). Имя — двойной клик.
+        Клик по смайлику — выбор из набора или любой свой (панель эмодзи macOS:
+        ⌃⌘Space). Имя — двойной клик.
       </p>
     </div>
   );
@@ -87,11 +111,11 @@ function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
     if (picker) setCustom(EMOJI_PRESETS.includes(type.emoji) ? "" : type.emoji);
   }, [picker, type.emoji]);
 
-
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPicker(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+        setPicker(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPicker(false);
@@ -124,7 +148,10 @@ function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
           {type.emoji || <TypeBadge type={type} />}
         </button>
         {picker && (
-          <div className="popover popover-left" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="popover popover-left"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mlabel mb-2">Смайлик</div>
             <div className="grid grid-cols-5 gap-1.5 w-max pb-2">
               {EMOJI_PRESETS.map((em) => (
@@ -199,7 +226,11 @@ function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
           {type.name}
         </span>
       )}
-      {taskCount > 0 && <span className="mmeta">{plural(taskCount, ["задача", "задачи", "задач"])}</span>}
+      {taskCount > 0 && (
+        <span className="mmeta">
+          {plural(taskCount, ["задача", "задачи", "задач"])}
+        </span>
+      )}
       <ConfirmButton
         className="row-btn row-btn-danger"
         armedClassName="!bg-over/15 !text-over"

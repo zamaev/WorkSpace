@@ -386,7 +386,11 @@ type Member struct {
 }
 
 func ListMembers(db *sql.DB) ([]Member, error) {
-	rows, err := db.Query(`SELECT project_id, person_id FROM project_members ORDER BY project_id, person_id`)
+	rows, err := db.Query(`
+		SELECT m.project_id, m.person_id FROM project_members m
+		JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+		JOIN people h ON h.id = m.person_id AND h.deleted_at IS NULL
+		ORDER BY m.project_id, m.person_id`)
 	if err != nil {
 		return nil, err
 	}

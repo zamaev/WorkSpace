@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	ErrNotFound   = errors.New("задача не найдена")
+	ErrNotFound   = errors.New("не найдено")
 	ErrCycle      = errors.New("нельзя перенести задачу внутрь её собственного поддерева")
 	ErrBadParent  = errors.New("родительская задача не существует")
 	ErrValidation = errors.New("невалидные данные")
@@ -236,6 +236,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 			}
 			return Task{}, nil, err
 		}
+		if proj, err := loadProject(tx, parent.ProjectID); err == nil && proj.Archived {
+			return Task{}, nil, ErrArchivedTarget
+		}
 		projectID = parent.ProjectID
 	} else {
 		if r.ProjectID == nil {
@@ -274,12 +277,18 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 
 	if r.TypeID != nil {
 		if err := refExists(tx, "task_types", *r.TypeID); err != nil {
-			return Task{}, nil, ErrBadType
+			if errors.Is(err, ErrNotFound) {
+				return Task{}, nil, ErrBadType
+			}
+			return Task{}, nil, err
 		}
 	}
 	if r.AssigneeID != nil {
 		if err := refExists(tx, "people", *r.AssigneeID); err != nil {
-			return Task{}, nil, ErrBadPerson
+			if errors.Is(err, ErrNotFound) {
+				return Task{}, nil, ErrBadPerson
+			}
+			return Task{}, nil, err
 		}
 	}
 
@@ -364,20 +373,17 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	spawnDate, spawnRule := "", ""
 	if cur.Repeat != nil && cur.ScheduledOn != nil {
 		if rule, err := parseRepeat(*cur.Repeat); err == nil {
-			moved := r.SetScheduledOn && r.ScheduledOn != nil && !sameDay(r.ScheduledOn, cur.ScheduledOn)
+			// спавн следующего вхождения — ТОЛЬКО при выполнении.
+			// Перенос повторяющейся ничего не создаёт: правило остаётся
+			// у задачи, будущие вхождения — призраки от новой даты
 			doneFlip := r.Done != nil && *r.Done && !cur.Done
-			if doneFlip || moved {
-				// done или перенос: переносится всегда ближайшее
-				// вхождение, серия продолжается по расписанию — спавн
-				// следующего, правило переезжает в него. База отсчёта:
-				// при переносе — НОВАЯ дата (перенёс назад — серия идёт
-				// от нового числа; дубль исключён «строго после»),
-				// при done — дата вхождения
-				base := *cur.ScheduledOn
-				if moved {
-					base = *r.ScheduledOn
+			if doneFlip {
+				// legacy-повтор без якоря серии: заякорить на себя,
+				// чтобы спавн унаследовал связь
+				if cur.SeriesID == nil {
+					cur.SeriesID = &id
 				}
-				spawnDate = nextOccurrence(maxISO(base, todayISO()), rule.Days)
+				spawnDate = nextOccurrence(maxISO(*cur.ScheduledOn, todayISO()), rule.Days)
 				// не приземляемся на день, уже занятый другим живым
 				// вхождением серии (разовые переносы занимают дни)
 				if cur.SeriesID != nil {
@@ -459,6 +465,9 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		finalScheduled = r.ScheduledOn
 	}
 	if finalScheduled == nil {
+		if r.SetEndOn && r.EndOn != nil {
+			return nil, fmt.Errorf("%w: диапазону работы нужен день начала", ErrValidation)
+		}
 		cur.EndOn = nil
 	}
 	if finalScheduled != nil && cur.DueOn != nil && *cur.DueOn < *finalScheduled {
@@ -469,6 +478,11 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	}
 	if cur.EndOn != nil && finalScheduled != nil && *cur.EndOn < *finalScheduled {
 		return nil, fmt.Errorf("%w: конец работы раньше начала", ErrValidation)
+	}
+	// спавн уже принял правило серии — на закрываемой задаче оно не
+	// остаётся, даже если этот же PATCH пытался его поставить
+	if spawnDate != "" {
+		cur.Repeat = nil
 	}
 	if cur.Repeat != nil {
 		if finalScheduled == nil {
@@ -485,6 +499,11 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		return nil, err
 	}
 
+	// перенос в корень СВОЕГО проекта: та же семантика «в корень», что и
+	// для чужого — переиспользуем ветку parentId=null ниже
+	if r.SetProjectID && r.ProjectID != nil && *r.ProjectID == cur.ProjectID && cur.ParentID != nil {
+		r.SetParentID, r.ParentID = true, nil
+	}
 	// перенос в корень другого проекта: эквивалент parentId=null в scope
 	// нового проекта
 	if r.SetProjectID && r.ProjectID != nil && *r.ProjectID != cur.ProjectID {
@@ -661,19 +680,18 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 // тип, исполнитель, правило) на дату dateISO + копия поддерева со
 // сброшенным done и без дат.
 func spawnSeriesCopy(tx *sql.Tx, src Task, rule, dateISO string, affected map[int64]bool) error {
-	sibs, err := siblingIDs(tx, src.ParentID, src.ProjectID, 0)
-	if err != nil {
+	var pos, dayPos int
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(position)+1, 0) FROM tasks WHERE parent_id IS ? AND project_id = ? AND deleted_at IS NULL`, src.ParentID, src.ProjectID).Scan(&pos); err != nil {
 		return err
 	}
-	day, err := dayIDs(tx, dateISO, 0)
-	if err != nil {
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(day_position)+1, 0) FROM tasks WHERE scheduled_on = ? AND deleted_at IS NULL`, dateISO).Scan(&dayPos); err != nil {
 		return err
 	}
 	ts := now()
 	res, err := tx.Exec(
 		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, repeat, series_id, type_id, assignee_id, position, day_position, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.SeriesID, src.TypeID, src.AssigneeID, len(sibs), len(day), ts, ts,
+		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.SeriesID, src.TypeID, src.AssigneeID, pos, dayPos, ts, ts,
 	)
 	if err != nil {
 		return err
@@ -687,7 +705,7 @@ func spawnSeriesCopy(tx *sql.Tx, src Task, rule, dateISO string, affected map[in
 }
 
 func copyChildren(tx *sql.Tx, fromParent, toParent, projectID int64, affected map[int64]bool) error {
-	rows, err := tx.Query(taskSelect+` WHERE parent_id = ? ORDER BY position, id`, fromParent)
+	rows, err := tx.Query(taskSelect+` WHERE parent_id = ? AND deleted_at IS NULL ORDER BY position, id`, fromParent)
 	if err != nil {
 		return err
 	}

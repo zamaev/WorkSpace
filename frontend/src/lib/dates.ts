@@ -83,8 +83,18 @@ export function fmtWeekRange(mondayIso: string): string {
 }
 
 const MONTHS_NOM = [
-  "Январь","Февраль","Март","Апрель","Май","Июнь",
-  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь",
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
 ];
 
 // «Июль 2026» — заголовок месяца в календаре.
@@ -105,7 +115,9 @@ export function addMonths(monthIso: string, n: number): string {
 }
 
 // 42 ячейки (6 недель от понедельника) для сетки месяца.
-export function monthCells(monthIso: string): { iso: string; inMonth: boolean }[] {
+export function monthCells(
+  monthIso: string,
+): { iso: string; inMonth: boolean }[] {
   const first = firstOfMonth(monthIso);
   const start = mondayOf(first);
   const month = first.slice(0, 7);

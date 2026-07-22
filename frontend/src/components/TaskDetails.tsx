@@ -49,23 +49,51 @@ export function TaskDetails({
   const repeatRef = useRef<HTMLButtonElement>(null);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // отложенное сохранение держим в ref: при размонтировании (Escape в
+  // модалке) и смене задачи его надо ВЫПОЛНИТЬ, а не отменить — иначе
+  // набранный текст молча теряется
+  const pendingSave = useRef<(() => void) | null>(null);
+
+  const flushPending = () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const fn = pendingSave.current;
+    pendingSave.current = null;
+    if (fn) fn();
+  };
+
+  const cancelPending = () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    pendingSave.current = null;
+  };
 
   useEffect(() => {
+    flushPending();
     setTitle(task?.title ?? "");
     setPicker(null);
-  }, [taskId, task?.title]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
   useEffect(() => {
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
+    if (task && title !== task.title && !pendingSave.current)
+      setTitle(task.title);
+    // соседняя правка названия пришла merge'ем — но не во время набора
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.title]);
+
+  useEffect(() => {
+    return flushPending;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // тихое сохранение через паузу после набора — обновление страницы
-  // больше не теряет текст
+  // тихое сохранение через паузу после набора; unmount и смена задачи
+  // доигрывают отложенное немедленно
   const debounced = (fn: () => void) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(fn, 800);
+    pendingSave.current = fn;
+    saveTimer.current = setTimeout(() => {
+      pendingSave.current = null;
+      fn();
+    }, 800);
   };
 
   // автовысота описания: поле растёт под содержимое, без скролла
@@ -118,10 +146,20 @@ export function TaskDetails({
                 void patch(task.id, { title: v.trim() });
             });
           }}
-          onBlur={saveTitle}
+          onBlur={() => {
+            cancelPending();
+            saveTitle();
+          }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") saveTitle();
-            if (e.key === "Escape") setTitle(task.title);
+            if (e.key === "Enter") {
+              cancelPending();
+              saveTitle();
+            }
+            if (e.key === "Escape") {
+              // отмена набора: отложенное сохранение тоже отменяется
+              cancelPending();
+              setTitle(task.title);
+            }
           }}
         />
         {variant === "panel" ? (
@@ -429,7 +467,7 @@ export function TaskDetails({
             });
           }}
           onBlur={(e) => {
-            if (saveTimer.current) clearTimeout(saveTimer.current);
+            cancelPending();
             const v = e.target.value;
             if (v !== task.description) void patch(task.id, { description: v });
           }}
@@ -478,7 +516,8 @@ export function TaskModal({
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // при открытом попапе Escape закрывает только его (свой слушатель)
+      if (e.key === "Escape" && !document.querySelector(".popover")) onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

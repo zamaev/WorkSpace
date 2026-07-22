@@ -153,37 +153,18 @@ func TestSeriesLifecycle(t *testing.T) {
 		t.Fatalf("спавн после done: %+v", spawned)
 	}
 
-	// кейс «двух задач в один день»: перенос ср 09 → пн 14 — это дата
-	// следующего вхождения; спавн обязан скипнуть на ср 16
-	e.patch(spawned[0].ID, map[string]any{"scheduledOn": "2030-01-14"}, 200)
-	all = e.tasks()
-	if n := len(onDate(all, "планёрка", "2030-01-14")); n != 1 {
-		t.Errorf("на пн 14 задач: %d, ждал 1 (без дубля)", n)
-	}
-	next := onDate(all, "планёрка", "2030-01-16")
-	if len(next) != 1 || next[0].Repeat == nil {
-		t.Fatalf("серия должна продолжиться со ср 16 с правилом: %+v", next)
-	}
-	// перенесённая выпала из расписания, но осталась в серии
-	moved := onDate(all, "планёрка", "2030-01-14")
-	if moved[0].Repeat != nil || moved[0].SeriesID == nil {
-		t.Errorf("перенесённая: %+v", moved[0])
-	}
-
-	// перенос НАЗАД: живое вхождение ср 16 -> ср 09 неделю раньше;
-	// серия перебазируется — следующее вхождение снова ср 16
-	live := onDate(e.tasks(), "планёрка", "2030-01-16")
-	if len(live) != 1 {
-		t.Fatalf("живое вхождение: %+v", live)
-	}
-	e.patch(live[0].ID, map[string]any{"scheduledOn": "2030-01-09"}, 200)
-	all = e.tasks()
-	rebased := onDate(all, "планёрка", "2030-01-16")
-	if len(rebased) != 1 || rebased[0].Repeat == nil {
-		t.Errorf("после переноса назад серия должна идти от нового числа (след. ср 16): %+v", rebased)
-	}
-	if n := len(onDate(all, "планёрка", "2030-01-09")); n != 1 {
-		t.Errorf("на ср 09 задач: %d, ждал 1", n)
+	// перенос (вперёд и назад) НИЧЕГО не создаёт: правило остаётся у
+	// задачи, всего задач по-прежнему две (done + живая)
+	for _, day := range []string{"2030-01-14", "2030-01-02", "2030-01-16"} {
+		e.patch(spawned[0].ID, map[string]any{"scheduledOn": day}, 200)
+		all = e.tasks()
+		if len(all) != 2 {
+			t.Fatalf("после переноса на %s: %d задач, ждал 2", day, len(all))
+		}
+		live := onDate(all, "планёрка", day)
+		if len(live) != 1 || live[0].Repeat == nil || live[0].SeriesID == nil {
+			t.Fatalf("после переноса на %s: %+v", day, live)
+		}
 	}
 }
 

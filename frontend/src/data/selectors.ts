@@ -50,7 +50,12 @@ export function projectUndone(
   projects: Map<number, Project>,
   projectId: number,
 ): number {
-  const ids = new Set(projectSubtreeIds(projects, projectId));
+  // архивные подпроекты не считаем: их задачи скрыты из всех видов
+  const ids = new Set(
+    projectSubtreeIds(projects, projectId).filter(
+      (id) => !projects.get(id)?.archived,
+    ),
+  );
   let n = 0;
   for (const t of tasks.values()) {
     if (ids.has(t.projectId) && !t.done) n++;

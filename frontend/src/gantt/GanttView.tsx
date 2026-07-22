@@ -65,6 +65,14 @@ function minISO(a: string, b: string): string {
   return a < b ? a : b;
 }
 
+function dayDiffSigned(a: string, b: string): number {
+  return Math.round(
+    (new Date(`${b}T00:00:00`).getTime() -
+      new Date(`${a}T00:00:00`).getTime()) /
+      86400000,
+  );
+}
+
 // Итоговые границы фигуры проекта с учётом drag-превью и клампов resize.
 function applyDrag(
   start: string | null,
@@ -108,16 +116,30 @@ function applyTaskDrag(
     return { scheduled, end, soft, due };
   const d = drag.delta;
   switch (drag.mode) {
-    case "move":
+    case "move": {
+      // старт не заезжает за рубежи (план ≤ мягкий ≤ жёсткий на сервере)
+      let ns = scheduled && addDays(scheduled, d);
+      let shift = d;
+      if (ns && soft && ns > soft) {
+        ns = soft;
+        shift = dayDiffSigned(scheduled!, ns);
+      }
+      if (ns && due && ns > due) {
+        ns = due;
+        shift = dayDiffSigned(scheduled!, ns);
+      }
       return {
-        scheduled: scheduled && addDays(scheduled, d),
-        end: end && addDays(end, d),
+        scheduled: ns,
+        end: end && addDays(end, shift),
         soft,
         due,
       };
+    }
     case "left": {
       let ns = scheduled && addDays(scheduled, d);
       if (ns && end && ns > end) ns = end;
+      if (ns && soft && ns > soft) ns = soft;
+      if (ns && due && ns > due) ns = due;
       return { scheduled: ns, end, soft, due };
     }
     case "right": {
@@ -125,8 +147,12 @@ function applyTaskDrag(
       if (ne && scheduled && ne < scheduled) ne = scheduled;
       return { scheduled, end: ne, soft, due };
     }
-    case "single":
-      return { scheduled: scheduled && addDays(scheduled, d), end, soft, due };
+    case "single": {
+      let ns = scheduled && addDays(scheduled, d);
+      if (ns && soft && ns > soft) ns = soft;
+      if (ns && due && ns > due) ns = due;
+      return { scheduled: ns, end, soft, due };
+    }
     case "soft": {
       let np = soft && addDays(soft, d);
       if (np && scheduled && np < scheduled) np = scheduled;
@@ -189,6 +215,7 @@ export function GanttView() {
     }
     for (const t of tasks.values()) {
       if (t.scheduledOn) dates.push(t.scheduledOn);
+      if (t.endOn) dates.push(t.endOn);
       if (t.softDueOn) dates.push(t.softDueOn);
       if (t.dueOn) dates.push(t.dueOn);
     }
@@ -207,7 +234,10 @@ export function GanttView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  // глобальные обработчики активного перетаскивания
+  // глобальные обработчики активного перетаскивания; актуальный drag —
+  // в ref (commit по pointerup идёт вне setState-апдейтера)
+  const dragRef = useRef<Drag | null>(null);
+  dragRef.current = drag;
   useEffect(() => {
     if (!drag) return;
     const onMove = (e: PointerEvent) => {
@@ -215,58 +245,63 @@ export function GanttView() {
       setDrag((d) => (d && delta !== d.delta ? { ...d, delta } : d));
     };
     const onUp = () => {
-      commitDrag();
+      commitDrag(dragRef.current);
+    };
+    const onCancel = () => {
+      // системная отмена (потеря захвата, жест ОС) — без коммита
+      setDrag(null);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointercancel", onCancel, { once: true });
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drag?.id, drag?.originX, drag?.mode]);
 
-  const commitDrag = () => {
-    setDrag((d) => {
-      if (!d || d.delta === 0) return null;
-      if (d.kind === "project") {
-        const p = projects.get(d.id);
-        if (p) {
-          const next = applyDrag(p.startOn, p.dueOn, d, "project", d.id);
-          if (next.start !== p.startOn || next.end !== p.dueOn) {
-            void patchProject(d.id, {
-              startOn: next.start ?? null,
-              dueOn: next.end ?? null,
-            });
-          }
-        }
-      } else {
-        const t = tasks.get(d.id);
-        if (t) {
-          const next = applyTaskDrag(
-            t.scheduledOn,
-            t.endOn,
-            t.softDueOn,
-            t.dueOn,
-            d,
-            d.id,
-          );
-          const p: {
-            scheduledOn?: string | null;
-            endOn?: string | null;
-            softDueOn?: string | null;
-            dueOn?: string | null;
-          } = {};
-          if (next.scheduled !== t.scheduledOn)
-            p.scheduledOn = next.scheduled ?? null;
-          if (next.end !== t.endOn) p.endOn = next.end ?? null;
-          if (next.soft !== t.softDueOn) p.softDueOn = next.soft ?? null;
-          if (next.due !== t.dueOn) p.dueOn = next.due ?? null;
-          if (Object.keys(p).length > 0) void patch(d.id, p);
+  // коммит вне setState-апдейтера: апдейтер должен быть чистым (в
+  // StrictMode он вызывается дважды — PATCH дублировался бы)
+  const commitDrag = (d: Drag | null) => {
+    setDrag(null);
+    if (!d || d.delta === 0) return;
+    if (d.kind === "project") {
+      const p = projects.get(d.id);
+      if (p) {
+        const next = applyDrag(p.startOn, p.dueOn, d, "project", d.id);
+        if (next.start !== p.startOn || next.end !== p.dueOn) {
+          void patchProject(d.id, {
+            startOn: next.start ?? null,
+            dueOn: next.end ?? null,
+          });
         }
       }
-      return null;
-    });
+      return;
+    }
+    const t = tasks.get(d.id);
+    if (!t) return;
+    const next = applyTaskDrag(
+      t.scheduledOn,
+      t.endOn,
+      t.softDueOn,
+      t.dueOn,
+      d,
+      d.id,
+    );
+    const p: {
+      scheduledOn?: string | null;
+      endOn?: string | null;
+      softDueOn?: string | null;
+      dueOn?: string | null;
+    } = {};
+    if (next.scheduled !== t.scheduledOn)
+      p.scheduledOn = next.scheduled ?? null;
+    if (next.end !== t.endOn) p.endOn = next.end ?? null;
+    if (next.soft !== t.softDueOn) p.softDueOn = next.soft ?? null;
+    if (next.due !== t.dueOn) p.dueOn = next.due ?? null;
+    if (Object.keys(p).length > 0) void patch(d.id, p);
   };
 
   const startDrag =
@@ -611,9 +646,9 @@ function ProjectRows({
                 startDrag={startDrag}
                 scale={scale}
               />
-              {pastOccurrences.map((o) => (
+              {pastOccurrences.map((o, oi) => (
                 <span
-                  key={`p${o.date}`}
+                  key={`p${oi}-${o.date}`}
                   className="g-diamond g-diamond-task"
                   style={{
                     left: xOf(scale, o.date) + DAY_W / 2,
@@ -632,6 +667,7 @@ function ProjectRows({
                     addDays(scale.start, scale.days - 1),
                     addDays(task.scheduledOn, 90),
                   ),
+                  todayISO(),
                 ).map((day) => (
                   <span
                     key={day}
