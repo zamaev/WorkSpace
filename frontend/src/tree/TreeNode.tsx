@@ -3,7 +3,7 @@ import { AvatarDot, Check, SBar } from "../components/ui";
 import { TypeBadge } from "../components/TypeBadge";
 import { DatePickerPopover } from "../components/DatePicker";
 import { useData } from "../data/DataProvider";
-import { childrenOf, childStats, subtreeIds } from "../data/selectors";
+import { childrenOf, subtreeIds } from "../data/selectors";
 import type { Task } from "../data/types";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { getDragTask, hasDragTask, setDragGhost, setDragTask } from "./dnd";
@@ -39,11 +39,13 @@ export function TreeNode({
   const [zone, setZone] = useState<DropZone>(null);
   const rowRef = useRef<HTMLDivElement>(null);
 
-  const children = childrenOf(tasks, task.id).filter((c) => !hideDone || !c.done);
-  const stats = childStats(tasks, task.id);
+  const children = childrenOf(tasks, task.id).filter(
+    (c) => !hideDone || !c.done,
+  );
   const open = isOpen(task.id);
   const today = todayISO();
-  const chipOverdue = task.scheduledOn !== null && !task.done && task.scheduledOn < today;
+  const chipOverdue =
+    task.scheduledOn !== null && !task.done && task.scheduledOn < today;
   const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < today;
 
   useEffect(() => {
@@ -77,18 +79,29 @@ export function TreeNode({
     if (dragId === null || dragId === task.id) return;
     if (subtreeIds(tasks, dragId).includes(task.id)) return;
     if (z === "into") {
-      void patch(dragId, { parentId: task.id, position: childrenOf(tasks, task.id).length });
+      void patch(dragId, {
+        parentId: task.id,
+        position: childrenOf(tasks, task.id).length,
+      });
       return;
     }
     // сиблинг до/после: позиция — индекс в списке сиблингов БЕЗ перетаскиваемой
-    const sibs = childrenOf(tasks, task.parentId).filter((t) => t.id !== dragId);
+    const sibs = childrenOf(tasks, task.parentId).filter(
+      (t) => t.id !== dragId,
+    );
     const idx = sibs.findIndex((t) => t.id === task.id);
     const at = z === "before" ? idx : idx + 1;
     void patch(dragId, { parentId: task.parentId, position: at });
   };
 
   const zoneCls =
-    zone === "into" ? "drop-into" : zone === "before" ? "drop-before" : zone === "after" ? "drop-after" : "";
+    zone === "into"
+      ? "drop-into"
+      : zone === "before"
+        ? "drop-before"
+        : zone === "after"
+          ? "drop-after"
+          : "";
   const selCls = selectedId === task.id ? "tree-row-sel" : "";
 
   return (
@@ -126,10 +139,14 @@ export function TreeNode({
           ▶
         </button>
         <SBar color={color} />
-        <Check done={task.done} label={task.done ? "Снять отметку" : "Отметить сделанной"} onClick={(e) => {
-          e.stopPropagation();
-          void patch(task.id, { done: !task.done });
-        }} />
+        <Check
+          done={task.done}
+          label={task.done ? "Снять отметку" : "Отметить сделанной"}
+          onClick={(e) => {
+            e.stopPropagation();
+            void patch(task.id, { done: !task.done });
+          }}
+        />
         {renaming ? (
           <RenameInput
             initial={task.title}
@@ -150,14 +167,15 @@ export function TreeNode({
             {task.title}
           </span>
         )}
-        {task.typeId !== null && types.get(task.typeId) && <TypeBadge type={types.get(task.typeId)!} />}
-        {task.assigneeId !== null && people.get(task.assigneeId) && (
-          <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={17} />
+        {task.typeId !== null && types.get(task.typeId) && (
+          <TypeBadge type={types.get(task.typeId)!} />
         )}
-        {stats.total > 0 && (
-          <span className="mmeta whitespace-nowrap" title="Сделано из прямых подзадач">
-            {stats.done}/{stats.total}
-          </span>
+        {task.assigneeId !== null && people.get(task.assigneeId) && (
+          <AvatarDot
+            name={people.get(task.assigneeId)!.name}
+            color={people.get(task.assigneeId)!.color}
+            size={17}
+          />
         )}
         <div className="relative">
           {task.scheduledOn ? (
@@ -180,7 +198,9 @@ export function TreeNode({
               endValue={task.endOn}
               title="План"
               allowRange
-              onChange={(start, end) => void patch(task.id, { scheduledOn: start, endOn: end })}
+              onChange={(start, end) =>
+                void patch(task.id, { scheduledOn: start, endOn: end })
+              }
               onClose={() => setDateMenu(false)}
             />
           )}
@@ -189,14 +209,14 @@ export function TreeNode({
           {task.dueOn ? (
             <button
               type="button"
-              className={`chip ${dueOverdue ? "date-chip-over" : ""}`}
+              className={`chip ${dueOverdue ? "chip-due-hard" : "chip-due"}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setDueMenu((v) => !v);
               }}
               title={dueOverdue ? "Дедлайн сорван" : "Изменить дедлайн"}
             >
-              ⚑ {fmtDayChip(task.dueOn)}
+              {fmtDayChip(task.dueOn)}
             </button>
           ) : null}
           {dueMenu && (
@@ -254,7 +274,13 @@ export function TreeNode({
   );
 }
 
-function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string) => void }) {
+function RenameInput({
+  initial,
+  onDone,
+}: {
+  initial: string;
+  onDone: (title: string) => void;
+}) {
   const [value, setValue] = useState(initial);
   return (
     <input

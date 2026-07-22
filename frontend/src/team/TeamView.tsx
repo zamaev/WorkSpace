@@ -26,50 +26,63 @@ export function TeamView() {
     );
   }
 
-  const list = [...people.values()].sort((a, b) => a.position - b.position || a.id - b.id);
+  const list = [...people.values()].sort(
+    (a, b) => a.position - b.position || a.id - b.id,
+  );
 
   return (
-    <div className="max-w-[560px]">
-      <div className="panel px-4 py-3">
-        <MLabel className="px-2 pb-2">Команда</MLabel>
-        {list.length === 0 && (
-          <p className="px-2 py-2 text-[13px] text-dim">
-            Пока никого. Добавь людей — и назначай их исполнителями задач; задача без исполнителя — твоя.
-          </p>
-        )}
-        {list.map((p) => (
-          <PersonRow
-            key={p.id}
-            person={p}
-            list={list}
-            taskCount={[...tasks.values()].filter((t) => t.assigneeId === p.id).length}
-          />
-        ))}
-        <div className="prow prow-tight !border-b-0">
-          <AvatarDot name={draft || "?"} color="var(--check)" size={26} />
-          <input
-            className="ghost-input flex-1 text-[13.5px]"
-            name="new-person"
-            aria-label="Новый человек"
-            placeholder="＋ Имя Фамилия…"
-            value={draft}
-            disabled={busy}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key === "Escape") setDraft("");
-              if (e.key === "Enter" && draft.trim()) {
-                setBusy(true);
-                const p = await createPerson(draft.trim(), nextColor(people.size));
-                setBusy(false);
-                if (p) setDraft("");
+    <div className="max-w-[960px]">
+      <div className="flex gap-4 items-start flex-wrap">
+        <div className="panel px-4 py-3 flex-1 min-w-[380px]">
+          <MLabel className="px-2 pb-2">Команда</MLabel>
+          {list.length === 0 && (
+            <p className="px-2 py-2 text-[13px] text-dim">
+              Пока никого. Добавь людей — и назначай их исполнителями задач;
+              задача без исполнителя — твоя.
+            </p>
+          )}
+          {list.map((p) => (
+            <PersonRow
+              key={p.id}
+              person={p}
+              list={list}
+              taskCount={
+                [...tasks.values()].filter((t) => t.assigneeId === p.id).length
               }
-            }}
-          />
+            />
+          ))}
+          <div className="prow prow-tight !border-b-0">
+            <AvatarDot name={draft || "?"} color="var(--check)" size={26} />
+            <input
+              className="ghost-input flex-1 text-[13.5px]"
+              name="new-person"
+              aria-label="Новый человек"
+              placeholder="＋ Имя Фамилия…"
+              value={draft}
+              disabled={busy}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Escape") setDraft("");
+                if (e.key === "Enter" && draft.trim()) {
+                  setBusy(true);
+                  const p = await createPerson(
+                    draft.trim(),
+                    nextColor(people.size),
+                  );
+                  setBusy(false);
+                  if (p) setDraft("");
+                }
+              }}
+            />
+          </div>
         </div>
-      </div>
 
-      <RolesPanel />
-      <p className="pt-3 text-[12px] text-dim">Имя и роль — двойной клик; цвет — клик по кружку; удаление — корзина, второй клик подтверждает.</p>
+        <RolesPanel />
+      </div>
+      <p className="pt-3 text-[12px] text-dim">
+        Имя и роль — двойной клик; цвет — клик по кружку; удаление — корзина,
+        второй клик подтверждает.
+      </p>
     </div>
   );
 }
@@ -79,13 +92,17 @@ function RolesPanel() {
   const { roles, people, createRole, patchRole, removeRole } = useData();
   const [draft, setDraft] = useState("");
 
-  const list = [...roles.values()].sort((a, b) => a.position - b.position || a.id - b.id);
+  const list = [...roles.values()].sort(
+    (a, b) => a.position - b.position || a.id - b.id,
+  );
 
   return (
-    <div className="panel px-4 py-3 mt-4">
+    <div className="panel px-4 py-3 w-[320px]">
       <MLabel className="px-2 pb-2">Роли</MLabel>
       {list.length === 0 && (
-        <p className="px-2 py-2 text-[13px] text-dim">Например «Backend», «QA», «Дизайн» — потом назначь людям.</p>
+        <p className="px-2 py-2 text-[13px] text-dim">
+          Например «Backend», «QA», «Дизайн» — потом назначь людям.
+        </p>
       )}
       {list.map((r) => (
         <RoleRow
@@ -98,7 +115,9 @@ function RolesPanel() {
         />
       ))}
       <div className="prow prow-tight !border-b-0">
-        <span className="w-[26px] text-center flex-none" aria-hidden="true">＋</span>
+        <span className="w-[26px] text-center flex-none" aria-hidden="true">
+          ＋
+        </span>
         <input
           className="ghost-input flex-1 text-[13.5px]"
           name="new-role"
@@ -129,7 +148,10 @@ function RoleRow({
   role: Role;
   list: Role[];
   count: number;
-  patchRole: (id: number, p: { name?: string; position?: number }) => Promise<void>;
+  patchRole: (
+    id: number,
+    p: { name?: string; position?: number },
+  ) => Promise<void>;
   removeRole: (id: number) => Promise<void>;
 }) {
   const [renaming, setRenaming] = useState(false);
@@ -152,7 +174,8 @@ function RoleRow({
         setDragGhost(e, e.currentTarget as HTMLElement);
       }}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes("application/x-workspace-role")) return;
+        if (!e.dataTransfer.types.includes("application/x-workspace-role"))
+          return;
         e.preventDefault();
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
         setDropZone(e.clientY - r.top < r.height / 2 ? "before" : "after");
@@ -162,7 +185,9 @@ function RoleRow({
         e.preventDefault();
         const zone = dropZone;
         setDropZone(null);
-        const dragId = Number(e.dataTransfer.getData("application/x-workspace-role"));
+        const dragId = Number(
+          e.dataTransfer.getData("application/x-workspace-role"),
+        );
         if (!Number.isFinite(dragId) || dragId === role.id) return;
         const others = list.filter((x) => x.id !== dragId);
         const idx = others.findIndex((x) => x.id === role.id);
@@ -187,7 +212,11 @@ function RoleRow({
           }}
         />
       ) : (
-        <span className="flex-1 min-w-0 truncate text-[13.5px]" title="Двойной клик — переименовать" onDoubleClick={() => setRenaming(true)}>
+        <span
+          className="flex-1 min-w-0 truncate text-[13.5px]"
+          title="Двойной клик — переименовать"
+          onDoubleClick={() => setRenaming(true)}
+        >
           {role.name}
         </span>
       )}
@@ -226,7 +255,8 @@ function PersonRow({
   useEffect(() => {
     if (!roleMenu) return;
     const onDown = (e: MouseEvent) => {
-      if (roleRef.current && !roleRef.current.contains(e.target as Node)) setRoleMenu(false);
+      if (roleRef.current && !roleRef.current.contains(e.target as Node))
+        setRoleMenu(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setRoleMenu(false);
@@ -242,7 +272,8 @@ function PersonRow({
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPicker(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+        setPicker(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPicker(false);
@@ -267,11 +298,15 @@ function PersonRow({
       className={`prow relative ${dropZone === "before" ? "drop-before" : dropZone === "after" ? "drop-after" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
-        e.dataTransfer.setData("application/x-workspace-person", String(person.id));
+        e.dataTransfer.setData(
+          "application/x-workspace-person",
+          String(person.id),
+        );
         setDragGhost(e, e.currentTarget as HTMLElement);
       }}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes("application/x-workspace-person")) return;
+        if (!e.dataTransfer.types.includes("application/x-workspace-person"))
+          return;
         e.preventDefault();
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
         setDropZone(e.clientY - r.top < r.height / 2 ? "before" : "after");
@@ -281,15 +316,24 @@ function PersonRow({
         e.preventDefault();
         const zone = dropZone;
         setDropZone(null);
-        const dragId = Number(e.dataTransfer.getData("application/x-workspace-person"));
+        const dragId = Number(
+          e.dataTransfer.getData("application/x-workspace-person"),
+        );
         if (!Number.isFinite(dragId) || dragId === person.id) return;
         const others = list.filter((x) => x.id !== dragId);
         const idx = others.findIndex((x) => x.id === person.id);
-        void patchPerson(dragId, { position: zone === "before" ? idx : idx + 1 });
+        void patchPerson(dragId, {
+          position: zone === "before" ? idx : idx + 1,
+        });
       }}
     >
       <div className="relative flex items-center" ref={pickerRef}>
-        <button type="button" title="Цвет" aria-label={`Цвет — ${person.name}`} onClick={() => setPicker((v) => !v)}>
+        <button
+          type="button"
+          title="Цвет"
+          aria-label={`Цвет — ${person.name}`}
+          onClick={() => setPicker((v) => !v)}
+        >
           <AvatarDot name={person.name} color={person.color} size={26} />
         </button>
         {picker && (
@@ -346,10 +390,15 @@ function PersonRow({
           title="Роль"
           onClick={() => setRoleMenu((v) => !v)}
         >
-          {person.roleId !== null ? (roles.get(person.roleId)?.name ?? "роль") : "роль"}
+          {person.roleId !== null
+            ? (roles.get(person.roleId)?.name ?? "роль")
+            : "роль"}
         </button>
         {roleMenu && (
-          <div className="popover popover-left" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="popover popover-left"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex flex-col gap-0.5 min-w-[150px]">
               <button
                 type="button"
@@ -378,12 +427,20 @@ function PersonRow({
                     {person.roleId === r.id && <span className="mmeta">✓</span>}
                   </button>
                 ))}
-              {roles.size === 0 && <p className="text-[12px] text-dim px-2.5 py-1 m-0">Создай роли ниже.</p>}
+              {roles.size === 0 && (
+                <p className="text-[12px] text-dim px-2.5 py-1 m-0">
+                  Создай роли ниже.
+                </p>
+              )}
             </div>
           </div>
         )}
       </div>
-      {taskCount > 0 && <span className="mmeta">{plural(taskCount, ["задача", "задачи", "задач"])}</span>}
+      {taskCount > 0 && (
+        <span className="mmeta">
+          {plural(taskCount, ["задача", "задачи", "задач"])}
+        </span>
+      )}
       <ConfirmButton
         className="row-btn row-btn-danger"
         armedClassName="!bg-over/15 !text-over"

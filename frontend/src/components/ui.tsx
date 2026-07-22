@@ -10,17 +10,25 @@ export function MLabel({
   accent?: boolean;
   className?: string;
 }) {
-  return <div className={`mlabel ${accent ? "mlabel-accent" : ""} ${className}`}>{children}</div>;
+  return (
+    <div className={`mlabel ${accent ? "mlabel-accent" : ""} ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 // Вертикальная полоска-маркёр цвета проекта.
 export function SBar({ color }: { color: string }) {
-  return <span className="sbar" style={{ background: color }} aria-hidden="true" />;
+  return (
+    <span className="sbar" style={{ background: color }} aria-hidden="true" />
+  );
 }
 
 // Точка-маркёр цвета проекта.
 export function SDot({ color }: { color: string }) {
-  return <span className="sdot" style={{ background: color }} aria-hidden="true" />;
+  return (
+    <span className="sdot" style={{ background: color }} aria-hidden="true" />
+  );
 }
 
 // Чекбокс задачи: off / done.
@@ -35,9 +43,17 @@ export function Check({
   label: string;
   onClick: (e: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const cls = ["check", size === "sm" ? "check-sm" : "", done ? "check-on" : ""].filter(Boolean).join(" ");
+  const cls = ["check", size === "sm" ? "check-sm" : "", done ? "check-on" : ""]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <button type="button" className={cls} aria-label={label} aria-pressed={done} onClick={onClick}>
+    <button
+      type="button"
+      className={cls}
+      aria-label={label}
+      aria-pressed={done}
+      onClick={onClick}
+    >
       {done ? "✓" : null}
     </button>
   );
@@ -46,7 +62,13 @@ export function Check({
 // Штриховая корзина в духе языка (наследует currentColor).
 export function TrashIcon({ size = 13 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
         d="M1.5 3.5h11M5.5 1.5h3M3 3.5l.7 8.2c.05.6.55 1.05 1.15 1.05h4.3c.6 0 1.1-.45 1.15-1.05l.7-8.2M5.6 6v4M8.4 6v4"
         stroke="currentColor"
@@ -69,11 +91,24 @@ export function initials(name: string): string {
 }
 
 // Кружок-инициалы человека.
-export function AvatarDot({ name, color, size = 18 }: { name: string; color: string; size?: number }) {
+export function AvatarDot({
+  name,
+  color,
+  size = 18,
+}: {
+  name: string;
+  color: string;
+  size?: number;
+}) {
   return (
     <span
       className="inline-flex items-center justify-center rounded-full font-semibold text-white flex-none"
-      style={{ width: size, height: size, background: color, fontSize: size * 0.44 }}
+      style={{
+        width: size,
+        height: size,
+        background: color,
+        fontSize: size * 0.44,
+      }}
       title={name}
       aria-label={name}
     >
@@ -85,9 +120,78 @@ export function AvatarDot({ name, color, size = 18 }: { name: string; color: str
 // Календарик для чипа плана.
 export function CalendarIcon({ size = 12 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <rect x="1.5" y="2.5" width="11" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M1.5 5.5h11M4.5 1v3M9.5 1v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="1.5"
+        y="2.5"
+        width="11"
+        height="10"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M1.5 5.5h11M4.5 1v3M9.5 1v3"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+// Флажок дедлайна (штриховой, в пару к календарику).
+export function FlagIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3 12.5V1.8M3 2h7.6l-1.8 2.6 1.8 2.6H3"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Коробка-архив с крышкой.
+export function ArchiveIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="1.5"
+        y="2"
+        width="11"
+        height="3"
+        rx="1"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M2.5 5v5.5c0 .8.7 1.5 1.5 1.5h6c.8 0 1.5-.7 1.5-1.5V5M5.5 7.5h3"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

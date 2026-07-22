@@ -4,7 +4,15 @@ import { useData } from "../data/DataProvider";
 import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { plural } from "../lib/plural";
-import { AvatarDot, CalendarIcon, Check, MLabel, SDot, TrashIcon } from "./ui";
+import {
+  AvatarDot,
+  CalendarIcon,
+  Check,
+  FlagIcon,
+  MLabel,
+  SDot,
+  TrashIcon,
+} from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
 import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker } from "./DatePicker";
@@ -68,10 +76,12 @@ export function TaskDetails({
   const project = projects.get(task.projectId);
   const crumb = breadcrumb(tasks, task.id);
   const today = todayISO();
-  const planOverdue = task.scheduledOn !== null && !task.done && task.scheduledOn < today;
+  const planOverdue =
+    task.scheduledOn !== null && !task.done && task.scheduledOn < today;
   const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < today;
   const type = task.typeId !== null ? types.get(task.typeId) : undefined;
-  const assignee = task.assigneeId !== null ? people.get(task.assigneeId) : undefined;
+  const assignee =
+    task.assigneeId !== null ? people.get(task.assigneeId) : undefined;
 
   const saveTitle = () => {
     const v = title.trim();
@@ -80,7 +90,8 @@ export function TaskDetails({
   };
 
   const subtreeCount = subtreeIds(tasks, task.id).length;
-  const toggle = (kind: PickerKind) => setPicker((v) => (v === kind ? null : kind));
+  const toggle = (kind: PickerKind) =>
+    setPicker((v) => (v === kind ? null : kind));
 
   return (
     <div className="flex flex-col gap-3">
@@ -99,7 +110,8 @@ export function TaskDetails({
             const v = e.target.value;
             setTitle(v);
             debounced(() => {
-              if (v.trim() && v.trim() !== task.title) void patch(task.id, { title: v.trim() });
+              if (v.trim() && v.trim() !== task.title)
+                void patch(task.id, { title: v.trim() });
             });
           }}
           onBlur={saveTitle}
@@ -113,7 +125,11 @@ export function TaskDetails({
             className="row-btn row-btn-danger"
             armedClassName="!bg-over/15 !text-over"
             confirmLabel="✓"
-            title={subtreeCount > 1 ? `Удалить с подзадачами (${subtreeCount}) — второй клик` : "Удалить — второй клик"}
+            title={
+              subtreeCount > 1
+                ? `Удалить с подзадачами (${subtreeCount}) — второй клик`
+                : "Удалить — второй клик"
+            }
             onConfirm={() => {
               void remove(task.id);
               onClose();
@@ -122,7 +138,12 @@ export function TaskDetails({
             <TrashIcon />
           </ConfirmButton>
         ) : (
-          <button type="button" className="row-btn" title="Закрыть" onClick={onClose}>
+          <button
+            type="button"
+            className="row-btn"
+            title="Закрыть"
+            onClick={onClose}
+          >
             ✕
           </button>
         )}
@@ -131,7 +152,9 @@ export function TaskDetails({
       {showCrumb && project && (
         <div className="flex items-center gap-2 min-w-0">
           <SDot color={project.color} />
-          <span className="crumb">{crumb ? `${project.name} / ${crumb}` : project.name}</span>
+          <span className="crumb">
+            {crumb ? `${project.name} / ${crumb}` : project.name}
+          </span>
         </div>
       )}
 
@@ -152,11 +175,12 @@ export function TaskDetails({
         <button
           ref={dueRef}
           type="button"
-          className={`chip ${picker === "due" ? "chip-accent-border" : task.dueOn ? (dueOverdue ? "date-chip-over" : "") : ""}`}
+          className={`chip flex items-center gap-1.5 ${picker === "due" ? "chip-accent-border" : task.dueOn ? (dueOverdue ? "chip-due-hard" : "chip-due") : ""}`}
           onClick={() => toggle("due")}
           title="Дедлайн"
         >
-          {task.dueOn ? `⚑ ${fmtDayChip(task.dueOn)}` : "⚑ дедлайн"}
+          <FlagIcon />
+          {task.dueOn ? fmtDayChip(task.dueOn) : "дедлайн"}
         </button>
         <button
           ref={typeRef}
@@ -183,11 +207,15 @@ export function TaskDetails({
         >
           {assignee ? (
             <>
-              <AvatarDot name={assignee.name} color={assignee.color} size={15} />
+              <AvatarDot
+                name={assignee.name}
+                color={assignee.color}
+                size={15}
+              />
               <span className="text-[12px]">{assignee.name}</span>
             </>
           ) : (
-            "я"
+            "исполнитель"
           )}
         </button>
       </div>
@@ -199,7 +227,9 @@ export function TaskDetails({
             endValue={task.endOn}
             title="План"
             allowRange
-            onChange={(start, end) => void patch(task.id, { scheduledOn: start, endOn: end })}
+            onChange={(start, end) =>
+              void patch(task.id, { scheduledOn: start, endOn: end })
+            }
             onClose={() => setPicker(null)}
           />
         </AnchoredPopover>
@@ -236,7 +266,11 @@ export function TaskDetails({
                   {task.typeId === t.id && <span className="mmeta">✓</span>}
                 </button>
               ))}
-            {types.size === 0 && <p className="text-[12px] text-dim px-2.5 py-1 m-0">Создай типы в разделе «Типы».</p>}
+            {types.size === 0 && (
+              <p className="text-[12px] text-dim px-2.5 py-1 m-0">
+                Создай типы в разделе «Типы».
+              </p>
+            )}
             {task.typeId !== null && (
               <button
                 type="button"
@@ -253,19 +287,11 @@ export function TaskDetails({
         </AnchoredPopover>
       )}
       {picker === "assignee" && (
-        <AnchoredPopover anchorRef={assigneeRef} onClose={() => setPicker(null)}>
+        <AnchoredPopover
+          anchorRef={assigneeRef}
+          onClose={() => setPicker(null)}
+        >
           <div className="flex flex-col gap-0.5 min-w-[190px]">
-            <button
-              type="button"
-              className="pop-item"
-              onClick={() => {
-                void patch(task.id, { assigneeId: null });
-                setPicker(null);
-              }}
-            >
-              <span>я (без исполнителя)</span>
-              {task.assigneeId === null && <span className="mmeta">✓</span>}
-            </button>
             {[...people.values()]
               .sort((a, b) => a.position - b.position || a.id - b.id)
               .map((p) => (
@@ -285,7 +311,23 @@ export function TaskDetails({
                   {task.assigneeId === p.id && <span className="mmeta">✓</span>}
                 </button>
               ))}
-            {people.size === 0 && <p className="text-[12px] text-dim px-2.5 py-1 m-0">Добавь людей в «Команде».</p>}
+            {people.size === 0 && (
+              <p className="text-[12px] text-dim px-2.5 py-1 m-0">
+                Добавь людей в «Команде».
+              </p>
+            )}
+            {task.assigneeId !== null && (
+              <button
+                type="button"
+                className="pop-item !text-over"
+                onClick={() => {
+                  void patch(task.id, { assigneeId: null });
+                  setPicker(null);
+                }}
+              >
+                снять исполнителя
+              </button>
+            )}
           </div>
         </AnchoredPopover>
       )}
@@ -307,7 +349,8 @@ export function TaskDetails({
             el.style.height = `${el.scrollHeight}px`;
             const v = el.value;
             debounced(() => {
-              if (v !== task.description) void patch(task.id, { description: v });
+              if (v !== task.description)
+                void patch(task.id, { description: v });
             });
           }}
           onBlur={(e) => {
@@ -323,7 +366,11 @@ export function TaskDetails({
           <ConfirmButton
             className="seg flex items-center gap-1.5"
             armedClassName="!text-over !border-over"
-            confirmLabel={subtreeCount > 1 ? `удалить ${plural(subtreeCount, ["задачу", "задачи", "задач"])}?` : "точно удалить?"}
+            confirmLabel={
+              subtreeCount > 1
+                ? `удалить ${plural(subtreeCount, ["задачу", "задачи", "задач"])}?`
+                : "точно удалить?"
+            }
             onConfirm={() => {
               void remove(task.id);
               onClose();
@@ -331,7 +378,11 @@ export function TaskDetails({
           >
             <TrashIcon /> Удалить
           </ConfirmButton>
-          <Link to={`/projects/${task.projectId}?focus=${task.id}`} className="mmeta !text-accent" onClick={onClose}>
+          <Link
+            to={`/projects/${task.projectId}?focus=${task.id}`}
+            className="mmeta !text-accent"
+            onClick={onClose}
+          >
             в дереве →
           </Link>
         </div>
@@ -362,7 +413,12 @@ export function TaskModal({
     <>
       <div className="sheet-overlay" onClick={onClose} />
       <div className="sheet" role="dialog" aria-modal="true">
-        <TaskDetails taskId={taskId} variant="modal" showCrumb={showCrumb} onClose={onClose} />
+        <TaskDetails
+          taskId={taskId}
+          variant="modal"
+          showCrumb={showCrumb}
+          onClose={onClose}
+        />
       </div>
     </>
   );

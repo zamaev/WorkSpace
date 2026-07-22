@@ -1,13 +1,30 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { MLabel, SBar, SDot, TrashIcon } from "../components/ui";
+import { ArchiveIcon, MLabel, SBar, SDot, TrashIcon } from "../components/ui";
 import { useData } from "../data/DataProvider";
-import { childProjects, projectSubtreeIds, projectUndone } from "../data/selectors";
+import {
+  childProjects,
+  projectSubtreeIds,
+  projectUndone,
+} from "../data/selectors";
 import { TaskDetails } from "../components/TaskDetails";
 import { PALETTE, nextColor, type Project } from "../data/types";
 import { getDragTask, hasDragTask, setDragGhost } from "./dnd";
-import { SELECTED_TASK_KEY, WEEKENDS_KEY, readPref, writePref } from "../lib/prefs";
-import { addDays, dayDiff, fmtDayHeader, mondayOf, todayISO, weekDays } from "../lib/dates";
+import {
+  SELECTED_TASK_KEY,
+  TWO_WEEKS_KEY,
+  WEEKENDS_KEY,
+  readPref,
+  writePref,
+} from "../lib/prefs";
+import {
+  addDays,
+  dayDiff,
+  fmtDayHeader,
+  mondayOf,
+  todayISO,
+  weekDays,
+} from "../lib/dates";
 import { ConfirmButton } from "../components/ConfirmButton";
 import { TreeView } from "./TreeView";
 
@@ -101,37 +118,47 @@ function DragWeekStrip() {
 
   if (!visible) return null;
   const cut = readPref(WEEKENDS_KEY) === "1" ? 5 : 7;
-  const days = weekDays(mondayOf(today)).slice(0, cut);
+  const monday = mondayOf(today);
+  const rows = [weekDays(monday).slice(0, cut)];
+  if (readPref(TWO_WEEKS_KEY) === "1")
+    rows.push(weekDays(addDays(monday, 7)).slice(0, cut));
 
   return (
-    <div className="dragweek">
-      {days.map((day) => (
-        <div
-          key={day}
-          className={`dragweek-cell ${day === today ? "wcell-today" : ""} ${over === day ? "wcell-drop" : ""}`}
-          onDragOver={(e) => {
-            if (!hasDragTask(e)) return;
-            e.preventDefault();
-            setOver(day);
-          }}
-          onDragLeave={() => setOver((v) => (v === day ? null : v))}
-          onDrop={(e) => {
-            e.preventDefault();
-            setOver(null);
-            setVisible(false);
-            const id = getDragTask(e);
-            if (id === null) return;
-            const t = tasks.get(id);
-            if (!t) return;
-            if (t.scheduledOn !== null && t.endOn !== null) {
-              const len = dayDiff(t.scheduledOn, t.endOn);
-              void patch(id, { scheduledOn: day, endOn: addDays(day, len) });
-            } else {
-              void patch(id, { scheduledOn: day });
-            }
-          }}
-        >
-          {fmtDayHeader(day)}
+    <div className="dragweek !flex-col">
+      {rows.map((days) => (
+        <div key={days[0]} className="flex gap-1.5">
+          {days.map((day) => (
+            <div
+              key={day}
+              className={`dragweek-cell ${day === today ? "wcell-today" : ""} ${over === day ? "wcell-drop" : ""}`}
+              onDragOver={(e) => {
+                if (!hasDragTask(e)) return;
+                e.preventDefault();
+                setOver(day);
+              }}
+              onDragLeave={() => setOver((v) => (v === day ? null : v))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setOver(null);
+                setVisible(false);
+                const id = getDragTask(e);
+                if (id === null) return;
+                const t = tasks.get(id);
+                if (!t) return;
+                if (t.scheduledOn !== null && t.endOn !== null) {
+                  const len = dayDiff(t.scheduledOn, t.endOn);
+                  void patch(id, {
+                    scheduledOn: day,
+                    endOn: addDays(day, len),
+                  });
+                } else {
+                  void patch(id, { scheduledOn: day });
+                }
+              }}
+            >
+              {fmtDayHeader(day)}
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -149,8 +176,12 @@ export function ProjectsView() {
     setSelectedState(id);
     writePref(SELECTED_TASK_KEY, id === null ? null : String(id));
   };
-  const [sideW, setSideW] = useState(() => readWidth(SIDE_W_KEY, 232, 180, 400));
-  const [inspW, setInspW] = useState(() => readWidth(INSP_W_KEY, 300, 240, 440));
+  const [sideW, setSideW] = useState(() =>
+    readWidth(SIDE_W_KEY, 232, 180, 400),
+  );
+  const [inspW, setInspW] = useState(() =>
+    readWidth(INSP_W_KEY, 300, 240, 440),
+  );
 
   const saveWidth = (key: string, v: number) => {
     try {
@@ -180,12 +211,16 @@ export function ProjectsView() {
 
   if (!current && actives.length > 0) {
     const last = readLastProject();
-    const target = last !== null && projects.has(last) && !projects.get(last)!.archived ? last : actives[0].id;
+    const target =
+      last !== null && projects.has(last) && !projects.get(last)!.archived
+        ? last
+        : actives[0].id;
     return <Navigate to={`/projects/${target}`} replace />;
   }
 
   try {
-    if (current && !current.archived) localStorage.setItem(LAST_PROJECT_KEY, String(current.id));
+    if (current && !current.archived)
+      localStorage.setItem(LAST_PROJECT_KEY, String(current.id));
   } catch {
     // приватный режим — выбор не переживёт перезагрузку
   }
@@ -193,7 +228,9 @@ export function ProjectsView() {
   // выбранная задача исчезла или сменила проект — сбрасываем выбор
   const selectedTask = selected !== null ? tasks.get(selected) : undefined;
   const effectiveSelected =
-    selectedTask && current && selectedTask.projectId === current.id ? selected : null;
+    selectedTask && current && selectedTask.projectId === current.id
+      ? selected
+      : null;
 
   return (
     <div className="projects-layout !gap-0">
@@ -210,7 +247,12 @@ export function ProjectsView() {
         }
       />
       {current ? (
-        <TreeView key={current.id} project={current} selectedId={effectiveSelected} onSelect={setSelected} />
+        <TreeView
+          key={current.id}
+          project={current}
+          selectedId={effectiveSelected}
+          onSelect={setSelected}
+        />
       ) : (
         <div className="flex-1 panel px-6 py-8 text-center">
           <p className="text-[14px] font-semibold m-0">Проектов пока нет</p>
@@ -234,9 +276,15 @@ export function ProjectsView() {
       {current && (
         <aside className="inspector panel px-4 py-4" style={{ width: inspW }}>
           {effectiveSelected !== null ? (
-            <TaskDetails taskId={effectiveSelected} variant="panel" onClose={() => setSelected(null)} />
+            <TaskDetails
+              taskId={effectiveSelected}
+              variant="panel"
+              onClose={() => setSelected(null)}
+            />
           ) : (
-            <p className="text-[13px] text-dim m-0">Выбери задачу — здесь появятся её детали.</p>
+            <p className="text-[13px] text-dim m-0">
+              Выбери задачу — здесь появятся её детали.
+            </p>
           )}
         </aside>
       )}
@@ -287,7 +335,11 @@ function Sidebar({ currentId }: { currentId: number | null }) {
   const roots = childProjects(projects, null).filter((p) => !p.archived);
   // верхние архивные: сам архивен, родитель — нет (или корень)
   const archivedTops = [...projects.values()]
-    .filter((p) => p.archived && (p.parentId === null || !projects.get(p.parentId)?.archived))
+    .filter(
+      (p) =>
+        p.archived &&
+        (p.parentId === null || !projects.get(p.parentId)?.archived),
+    )
     .sort((a, b) => a.position - b.position || a.id - b.id);
 
   return (
@@ -321,7 +373,11 @@ function Sidebar({ currentId }: { currentId: number | null }) {
             if (e.key === "Escape") setDraft("");
             if (e.key === "Enter" && draft.trim()) {
               setBusy(true);
-              const p = await createProject(draft.trim(), nextColor(projects.size), null);
+              const p = await createProject(
+                draft.trim(),
+                nextColor(projects.size),
+                null,
+              );
               setBusy(false);
               if (p) {
                 setDraft("");
@@ -334,11 +390,21 @@ function Sidebar({ currentId }: { currentId: number | null }) {
 
       {archivedTops.length > 0 && (
         <div className="pt-3">
-          <button type="button" className="mlabel px-3 pb-1" onClick={() => setShowArchive((v) => !v)}>
+          <button
+            type="button"
+            className="mlabel px-3 pb-1"
+            onClick={() => setShowArchive((v) => !v)}
+          >
             Архив · {archivedTops.length} {showArchive ? "▾" : "▸"}
           </button>
           {showArchive &&
-            archivedTops.map((p) => <ArchivedRow key={p.id} project={p} onOpen={(id) => navigate(`/projects/${id}`)} />)}
+            archivedTops.map((p) => (
+              <ArchivedRow
+                key={p.id}
+                project={p}
+                onOpen={(id) => navigate(`/projects/${id}`)}
+              />
+            ))}
         </div>
       )}
     </aside>
@@ -360,7 +426,8 @@ function SidebarNode({
   toggleClosed: (id: number) => void;
   onSelect: (id: number) => void;
 }) {
-  const { tasks, projects, patch, patchProject, createProject, removeProject } = useData();
+  const { tasks, projects, patch, patchProject, createProject, removeProject } =
+    useData();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(project.name);
   const [picker, setPicker] = useState(false);
@@ -369,7 +436,9 @@ function SidebarNode({
   const [zone, setZone] = useState<DropZone>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const children = childProjects(projects, project.id).filter((p) => !p.archived);
+  const children = childProjects(projects, project.id).filter(
+    (p) => !p.archived,
+  );
   const open = !closed.has(project.id);
   const undone = projectUndone(tasks, projects, project.id);
   const hasTasks = [...tasks.values()].some((t) => t.projectId === project.id);
@@ -379,7 +448,8 @@ function SidebarNode({
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPicker(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+        setPicker(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPicker(false);
@@ -419,12 +489,20 @@ function SidebarNode({
     const dragged = projects.get(dragId);
     if (!dragged) return;
     if (z === "into") {
-      void patchProject(dragId, { parentId: project.id, position: children.length });
+      void patchProject(dragId, {
+        parentId: project.id,
+        position: children.length,
+      });
       return;
     }
-    const sibs = childProjects(projects, project.parentId).filter((p) => p.id !== dragId);
+    const sibs = childProjects(projects, project.parentId).filter(
+      (p) => p.id !== dragId,
+    );
     const idx = sibs.findIndex((p) => p.id === project.id);
-    void patchProject(dragId, { parentId: project.parentId, position: z === "before" ? idx : idx + 1 });
+    void patchProject(dragId, {
+      parentId: project.parentId,
+      position: z === "before" ? idx : idx + 1,
+    });
   };
 
   const finishRename = (value: string) => {
@@ -434,7 +512,14 @@ function SidebarNode({
     else setName(project.name);
   };
 
-  const zoneCls = zone === "into" ? "drop-into" : zone === "before" ? "drop-before" : zone === "after" ? "drop-after" : "";
+  const zoneCls =
+    zone === "into"
+      ? "drop-into"
+      : zone === "before"
+        ? "drop-before"
+        : zone === "after"
+          ? "drop-after"
+          : "";
 
   return (
     <div>
@@ -484,7 +569,10 @@ function SidebarNode({
             <SBar color={project.color} />
           </button>
           {picker && (
-            <div className="popover popover-left" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="popover popover-left"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="mlabel mb-2">Цвет</div>
               <div className="grid grid-cols-6 gap-2 w-max">
                 {PALETTE.map((c) => (
@@ -570,7 +658,7 @@ function SidebarNode({
                 void patchProject(project.id, { archived: true });
               }}
             >
-              ▣
+              <ArchiveIcon />
             </button>
           )}
         </div>
@@ -590,7 +678,10 @@ function SidebarNode({
         ))}
 
       {open && adding && (
-        <div className="proj-row !cursor-text" style={{ marginLeft: (depth + 1) * 14 }}>
+        <div
+          className="proj-row !cursor-text"
+          style={{ marginLeft: (depth + 1) * 14 }}
+        >
           <span className="chevron !w-[16px] chevron-empty">▶</span>
           <span className="color-btn" aria-hidden="true">
             <SBar color="var(--check)" />
@@ -612,7 +703,11 @@ function SidebarNode({
                 setAdding(false);
               }
               if (e.key === "Enter" && childDraft.trim()) {
-                const p = await createProject(childDraft.trim(), nextColor(projects.size), project.id);
+                const p = await createProject(
+                  childDraft.trim(),
+                  nextColor(projects.size),
+                  project.id,
+                );
                 if (p) {
                   setChildDraft("");
                   setAdding(false);
@@ -627,16 +722,27 @@ function SidebarNode({
   );
 }
 
-function ArchivedRow({ project, onOpen }: { project: Project; onOpen: (id: number) => void }) {
+function ArchivedRow({
+  project,
+  onOpen,
+}: {
+  project: Project;
+  onOpen: (id: number) => void;
+}) {
   const { tasks, projects, patchProject, removeProject } = useData();
   const subtree = projectSubtreeIds(projects, project.id);
   const hasAnything =
-    subtree.length > 1 || [...tasks.values()].some((t) => t.projectId === project.id);
+    subtree.length > 1 ||
+    [...tasks.values()].some((t) => t.projectId === project.id);
 
   return (
     <div className="proj-row opacity-60 hover:opacity-100">
       <SDot color={project.color} />
-      <button type="button" className="flex-1 min-w-0 text-left truncate text-[13px]" onClick={() => onOpen(project.id)}>
+      <button
+        type="button"
+        className="flex-1 min-w-0 text-left truncate text-[13px]"
+        onClick={() => onOpen(project.id)}
+      >
         {project.name}
       </button>
       <div className="row-actions">

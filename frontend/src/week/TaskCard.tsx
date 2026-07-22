@@ -25,13 +25,15 @@ export function TaskCard({
   const { tasks, projects, types, people, patch } = useData();
   const crumb = breadcrumb(tasks, task.id);
   const color = projects.get(task.projectId)?.color ?? "var(--check)";
-  const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < todayISO();
+  const dueOverdue =
+    task.dueOn !== null && !task.done && task.dueOn < todayISO();
 
   return (
     <div
-      className={`task-card ${task.done ? "task-card-done" : ""} ${dropBefore ? "card-drop-before" : ""}`}
+      className={`task-card cursor-pointer ${task.done ? "task-card-done" : ""} ${dropBefore ? "card-drop-before" : ""}`}
       style={{ borderLeft: `3px solid ${color}` }}
       draggable
+      onClick={() => onOpen(task.id)}
       onDragStart={(e) => {
         setDragTask(e, task.id);
         setDragGhost(e, e.currentTarget as HTMLElement);
@@ -44,28 +46,46 @@ export function TaskCard({
           size="sm"
           done={task.done}
           label={task.done ? "Снять отметку" : "Отметить сделанной"}
-          onClick={() => void patch(task.id, { done: !task.done })}
+          onClick={(e) => {
+            e.stopPropagation();
+            void patch(task.id, { done: !task.done });
+          }}
         />
-        <button
-          type="button"
-          className="task-title flex-1 min-w-0 text-left"
-          onClick={() => onOpen(task.id)}
-          title="Детали"
-        >
+        <span className="task-title flex-1 min-w-0 text-left" title="Детали">
           {task.title}
-        </button>
+        </span>
         {task.endOn && task.scheduledOn && (
-          <span className="mmeta whitespace-nowrap">1/{dayDiff(task.scheduledOn, task.endOn) + 1}</span>
+          <span className="mmeta whitespace-nowrap">
+            1/{dayDiff(task.scheduledOn, task.endOn) + 1}
+          </span>
         )}
       </div>
-      {(crumb || task.dueOn || task.typeId !== null || task.assigneeId !== null) && (
+      {(crumb ||
+        task.dueOn ||
+        task.typeId !== null ||
+        task.assigneeId !== null) && (
         <div className="flex items-center gap-2 pl-[27px] min-w-0">
           {task.assigneeId !== null && people.get(task.assigneeId) && (
-            <AvatarDot name={people.get(task.assigneeId)!.name} color={people.get(task.assigneeId)!.color} size={15} />
+            <AvatarDot
+              name={people.get(task.assigneeId)!.name}
+              color={people.get(task.assigneeId)!.color}
+              size={15}
+            />
           )}
-          {task.typeId !== null && types.get(task.typeId) && <TypeBadge type={types.get(task.typeId)!} size={13} />}
+          {task.typeId !== null && types.get(task.typeId) && (
+            <TypeBadge type={types.get(task.typeId)!} size={13} />
+          )}
           {task.dueOn && (
-            <span className={`mmeta whitespace-nowrap ${dueOverdue ? "!text-over" : ""}`}>до {fmtDayChip(task.dueOn)}</span>
+            <span
+              className="mmeta whitespace-nowrap"
+              style={{
+                color: dueOverdue
+                  ? "var(--over)"
+                  : "color-mix(in srgb, var(--over) 65%, var(--dim))",
+              }}
+            >
+              до {fmtDayChip(task.dueOn)}
+            </span>
           )}
           {crumb && <span className="crumb flex-1">{crumb}</span>}
         </div>
