@@ -79,7 +79,6 @@ type UpdateReq struct {
 	DayPosition    *int
 	SetRepeat      bool
 	Repeat         *RepeatRule
-	RepeatScope    string // "one" — разовый перенос вхождения серии; иначе серия целиком
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
@@ -144,19 +143,6 @@ func nextOccurrence(fromISO string, days []int) string {
 		}
 	}
 	return fromISO
-}
-
-// isoWeekday — день недели даты в ISO (1=пн … 7=вс); битая дата — 0.
-func isoWeekday(iso string) int {
-	t, err := time.Parse("2006-01-02", iso)
-	if err != nil {
-		return 0
-	}
-	wd := int(t.Weekday())
-	if wd == 0 {
-		wd = 7
-	}
-	return wd
 }
 
 func maxISO(a, b string) string {
@@ -380,29 +366,18 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		if rule, err := parseRepeat(*cur.Repeat); err == nil {
 			moved := r.SetScheduledOn && r.ScheduledOn != nil && !sameDay(r.ScheduledOn, cur.ScheduledOn)
 			doneFlip := r.Done != nil && *r.Done && !cur.Done
-			switch {
-			case doneFlip || (moved && r.RepeatScope == "one"):
-				// done или разовый перенос: спавн следующего вхождения,
-				// правило переезжает в него
+			if doneFlip || moved {
+				// done или перенос: переносится всегда ближайшее
+				// вхождение, серия продолжается по расписанию — спавн
+				// следующего, правило переезжает в него
 				spawnDate = nextOccurrence(maxISO(*cur.ScheduledOn, todayISO()), rule.Days)
+				// перенос ровно на дату следующего вхождения: не
+				// дублируем день — серия продолжается со следующего
+				if moved && spawnDate == *r.ScheduledOn {
+					spawnDate = nextOccurrence(spawnDate, rule.Days)
+				}
 				spawnRule = *cur.Repeat
 				cur.Repeat = nil
-			case moved:
-				// перенос всей серии: день недели старой даты в правиле
-				// заменяется днём новой («со среды на четверг» = теперь
-				// по четвергам); совпадающие дни сливаются
-				oldDow, newDow := isoWeekday(*cur.ScheduledOn), isoWeekday(*r.ScheduledOn)
-				if oldDow != newDow {
-					days := make([]int, 0, len(rule.Days))
-					for _, d := range rule.Days {
-						if d != oldDow && d != newDow {
-							days = append(days, d)
-						}
-					}
-					days = append(days, newDow)
-					m := marshalRepeat(RepeatRule{Kind: rule.Kind, Days: days})
-					cur.Repeat = &m
-				}
 			}
 		}
 	}

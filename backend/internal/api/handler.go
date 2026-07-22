@@ -118,7 +118,6 @@ type patchBody struct {
 	Position    Opt[int]        `json:"position"`
 	DayPosition Opt[int]        `json:"dayPosition"`
 	Repeat      Opt[repeatJSON] `json:"repeat"`
-	RepeatScope string          `json:"repeatScope"`
 }
 
 type projectBody struct {
@@ -506,7 +505,6 @@ func Handler(db *sql.DB) http.Handler {
 				req.Repeat = &store.RepeatRule{Kind: b.Repeat.Val.Kind, Days: b.Repeat.Val.Days}
 			}
 		}
-		req.RepeatScope = b.RepeatScope
 		if b.DueOn.Set {
 			req.SetDueOn, req.DueOn = true, b.DueOn.Val
 		}

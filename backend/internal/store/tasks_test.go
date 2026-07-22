@@ -964,20 +964,20 @@ func TestRepeatDoneSpawnsNext(t *testing.T) {
 	_ = s2
 }
 
-func TestRepeatMoveOneAndSeries(t *testing.T) {
+func TestRepeatMove(t *testing.T) {
 	e := openTest(t)
-	m := e.mk(t, "синк", nil, new("2030-01-07"))
+	m := e.mk(t, "синк", nil, new("2030-01-07")) // пн; правило пн/чт
 	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
 		t.Fatal(err)
 	}
-	// разовый перенос: текущая на новую дату без правила, спавн на чт
-	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-08"), RepeatScope: "one"})
+	// перенос на вт (не в правиле): текущая на вт без правила, спавн на чт
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-08")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	nm := e.get(t, m.ID)
 	if nm.ScheduledOn == nil || *nm.ScheduledOn != "2030-01-08" || nm.Repeat != nil || nm.Done {
-		t.Errorf("текущая после one: %+v", nm)
+		t.Errorf("текущая после переноса: %+v", nm)
 	}
 	var spawned *Task
 	for i := range out {
@@ -986,18 +986,58 @@ func TestRepeatMoveOneAndSeries(t *testing.T) {
 		}
 	}
 	if spawned == nil || spawned.ScheduledOn == nil || *spawned.ScheduledOn != "2030-01-10" || spawned.Repeat == nil {
-		t.Fatalf("спавн после one: %+v", spawned)
-	}
-	// перенос серии: правило остаётся, новых задач нет
-	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11"), RepeatScope: "series"}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("спавн после переноса: %+v", spawned)
 	}
 	all, _ := ListTasks(e.db)
 	if len(all) != 2 {
 		t.Errorf("задач %d, ждал 2", len(all))
 	}
-	if ns := e.get(t, spawned.ID); ns.Repeat == nil || *ns.ScheduledOn != "2030-01-11" {
-		t.Errorf("серия после переноса: %+v", ns)
+}
+
+func TestRepeatMoveSkipsCollidingSpawn(t *testing.T) {
+	e := openTest(t)
+	// правило пн/ср, живая на пн; перенос пн -> ср (день следующего
+	// вхождения): в среду ровно одна задача, серия с пн следующей недели
+	m := e.mk(t, "планёрка", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3)}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-09")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spawned *Task
+	for i := range out {
+		if out[i].ID != m.ID && out[i].Title == "планёрка" {
+			spawned = &out[i]
+		}
+	}
+	if spawned == nil || *spawned.ScheduledOn != "2030-01-14" {
+		t.Fatalf("спавн должен скипнуть занятую среду и встать на пн 14: %+v", spawned)
+	}
+	all, _ := ListTasks(e.db)
+	onWed := 0
+	for _, x := range all {
+		if x.ScheduledOn != nil && *x.ScheduledOn == "2030-01-09" {
+			onWed++
+		}
+	}
+	if onWed != 1 {
+		t.Errorf("в среду %d задач, ждал 1", onWed)
+	}
+	// правило только пн: перенос пн -> пн+7 (слот следующего вхождения)
+	solo := e.mk(t, "соло", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, solo.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
+		t.Fatal(err)
+	}
+	out2, err := UpdateTask(e.db, solo.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-14")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range out2 {
+		if x.ID != solo.ID && x.Title == "соло" && (x.ScheduledOn == nil || *x.ScheduledOn != "2030-01-21") {
+			t.Errorf("серия должна продолжиться с пн 21: %+v", x)
+		}
 	}
 }
 
@@ -1105,7 +1145,7 @@ func TestSeriesID(t *testing.T) {
 		t.Fatalf("спавн без якоря: %+v", spawned)
 	}
 	// разовый перенос: обе задачи остаются в серии
-	out2, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11"), RepeatScope: "one"})
+	out2, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1123,61 +1163,3 @@ func TestSeriesID(t *testing.T) {
 	}
 }
 
-func TestRepeatMoveSeriesRewritesRuleDay(t *testing.T) {
-	e := openTest(t)
-	// 2030-01-07 пн; правило пн/ср/пт
-	m := e.mk(t, "синк", nil, new("2030-01-09")) // ср
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3, 5)}); err != nil {
-		t.Fatal(err)
-	}
-	// перенос всей серии со ср на чт: правило пн/чт/пт, спавна нет
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-10"), RepeatScope: "series"}); err != nil {
-		t.Fatal(err)
-	}
-	nm := e.get(t, m.ID)
-	if nm.Repeat == nil || *nm.Repeat != `{"kind":"weekly","days":[1,4,5]}` {
-		t.Errorf("правило после ср→чт: %v", nm.Repeat)
-	}
-	if *nm.ScheduledOn != "2030-01-10" {
-		t.Errorf("дата: %v", nm.ScheduledOn)
-	}
-	all, _ := ListTasks(e.db)
-	if len(all) != 1 {
-		t.Errorf("спавн при series-переносе: %d задач", len(all))
-	}
-	// перенос чт → пт (день уже в правиле): слияние в пн/пт
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11"), RepeatScope: "series"}); err != nil {
-		t.Fatal(err)
-	}
-	if nm := e.get(t, m.ID); *nm.Repeat != `{"kind":"weekly","days":[1,5]}` {
-		t.Errorf("слияние дней: %v", nm.Repeat)
-	}
-	// перенос на ту же неделю вперёд, тот же день недели (пт → пт): правило не меняется
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-18"), RepeatScope: "series"}); err != nil {
-		t.Fatal(err)
-	}
-	if nm := e.get(t, m.ID); *nm.Repeat != `{"kind":"weekly","days":[1,5]}` {
-		t.Errorf("тот же день недели: %v", nm.Repeat)
-	}
-	// пустой scope ведёт себя как series (дефолт)
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-14"), RepeatScope: ""}); err != nil { // пн
-		t.Fatal(err)
-	}
-	// пт(18)→пн(14): пт заменился пн; пн уже был — слияние в [1]
-	if nm := e.get(t, m.ID); *nm.Repeat != `{"kind":"weekly","days":[1]}` {
-		t.Errorf("дефолтный scope: %v", nm.Repeat)
-	}
-	// «только эту» день правила не трогает
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3)}); err != nil {
-		t.Fatal(err)
-	}
-	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-15"), RepeatScope: "one"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, x := range out {
-		if x.ID != m.ID && x.Repeat != nil && *x.Repeat != `{"kind":"weekly","days":[1,3]}` {
-			t.Errorf("one тронул правило: %v", *x.Repeat)
-		}
-	}
-}

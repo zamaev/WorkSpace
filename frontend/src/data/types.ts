@@ -68,7 +68,6 @@ export type TaskPatch = Partial<{
   position: number;
   dayPosition: number | null;
   repeat: RepeatRule | null;
-  repeatScope: "one" | "series";
 }>;
 
 export type ProjectPatch = Partial<{
