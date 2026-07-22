@@ -48,8 +48,9 @@ export function TreeNode({
   );
   const open = isOpen(task.id);
   const today = todayISO();
-  const chipOverdue =
-    task.scheduledOn !== null && !task.done && task.scheduledOn < today;
+  // диапазон просрочен по концу работы, не по началу
+  const planEnd = task.endOn ?? task.scheduledOn;
+  const chipOverdue = planEnd !== null && !task.done && planEnd < today;
   const due = duePhase(task.softDueOn, task.dueOn, today);
 
   useEffect(() => {

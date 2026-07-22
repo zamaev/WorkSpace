@@ -77,8 +77,8 @@ export function TaskDetails({
   const project = projects.get(task.projectId);
   const crumb = breadcrumb(tasks, task.id);
   const today = todayISO();
-  const planOverdue =
-    task.scheduledOn !== null && !task.done && task.scheduledOn < today;
+  const planEnd = task.endOn ?? task.scheduledOn;
+  const planOverdue = planEnd !== null && !task.done && planEnd < today;
   const due = duePhase(task.softDueOn, task.dueOn, today);
   const type = task.typeId !== null ? types.get(task.typeId) : undefined;
   const assignee =

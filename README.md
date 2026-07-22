@@ -9,7 +9,8 @@
 ## 🚀 Запуск
 
 ```sh
-docker compose up --build -d   # приложение на http://localhost:8787
+docker compose up --build -d    # приложение на http://localhost:8787
+# со старым Compose V1: docker-compose up --build -d
 ```
 
 База — SQLite-файл в `./data/` (переживает пересборку и перезапуск);
