@@ -12,10 +12,15 @@ export function rootTasks(tasks: Map<number, Task>, projectId: number): Task[] {
 }
 
 export function sortedProjects(projects: Map<number, Project>): Project[] {
-  return [...projects.values()].sort((a, b) => a.position - b.position || a.id - b.id);
+  return [...projects.values()].sort(
+    (a, b) => a.position - b.position || a.id - b.id,
+  );
 }
 
-export function childProjects(projects: Map<number, Project>, parentId: number | null): Project[] {
+export function childProjects(
+  projects: Map<number, Project>,
+  parentId: number | null,
+): Project[] {
   const out: Project[] = [];
   for (const p of projects.values()) {
     if (p.parentId === parentId) out.push(p);
@@ -23,7 +28,10 @@ export function childProjects(projects: Map<number, Project>, parentId: number |
   return out.sort((a, b) => a.position - b.position || a.id - b.id);
 }
 
-export function projectSubtreeIds(projects: Map<number, Project>, id: number): number[] {
+export function projectSubtreeIds(
+  projects: Map<number, Project>,
+  id: number,
+): number[] {
   const out: number[] = [];
   const stack = [id];
   while (stack.length > 0) {
@@ -37,7 +45,11 @@ export function projectSubtreeIds(projects: Map<number, Project>, id: number): n
 }
 
 // Несделанные задачи всего поддерева проектов.
-export function projectUndone(tasks: Map<number, Task>, projects: Map<number, Project>, projectId: number): number {
+export function projectUndone(
+  tasks: Map<number, Task>,
+  projects: Map<number, Project>,
+  projectId: number,
+): number {
   const ids = new Set(projectSubtreeIds(projects, projectId));
   let n = 0;
   for (const t of tasks.values()) {
@@ -47,7 +59,9 @@ export function projectUndone(tasks: Map<number, Task>, projects: Map<number, Pr
 }
 
 // Проекты не-архивные, развёрнутые в порядке дерева (для поповеров выбора).
-export function flattenActiveProjects(projects: Map<number, Project>): { project: Project; depth: number }[] {
+export function flattenActiveProjects(
+  projects: Map<number, Project>,
+): { project: Project; depth: number }[] {
   const out: { project: Project; depth: number }[] = [];
   const walk = (parentId: number | null, depth: number) => {
     for (const p of childProjects(projects, parentId)) {
@@ -60,11 +74,17 @@ export function flattenActiveProjects(projects: Map<number, Project>): { project
   return out;
 }
 
-export function isTaskVisible(projects: Map<number, Project>, t: Task): boolean {
+export function isTaskVisible(
+  projects: Map<number, Project>,
+  t: Task,
+): boolean {
   return !(projects.get(t.projectId)?.archived ?? false);
 }
 
-export function childrenOf(tasks: Map<number, Task>, parentId: number | null): Task[] {
+export function childrenOf(
+  tasks: Map<number, Task>,
+  parentId: number | null,
+): Task[] {
   const out: Task[] = [];
   for (const t of tasks.values()) {
     if (t.parentId === parentId) out.push(t);
@@ -76,9 +96,17 @@ export function childrenOf(tasks: Map<number, Task>, parentId: number | null): T
 export function spanTasksOn(tasks: Map<number, Task>, iso: string): Task[] {
   const out: Task[] = [];
   for (const t of tasks.values()) {
-    if (t.scheduledOn !== null && t.endOn !== null && t.scheduledOn < iso && iso <= t.endOn) out.push(t);
+    if (
+      t.scheduledOn !== null &&
+      t.endOn !== null &&
+      t.scheduledOn < iso &&
+      iso <= t.endOn
+    )
+      out.push(t);
   }
-  return out.sort((a, b) => a.scheduledOn!.localeCompare(b.scheduledOn!) || a.id - b.id);
+  return out.sort(
+    (a, b) => a.scheduledOn!.localeCompare(b.scheduledOn!) || a.id - b.id,
+  );
 }
 
 export function tasksOn(tasks: Map<number, Task>, iso: string): Task[] {
@@ -86,16 +114,24 @@ export function tasksOn(tasks: Map<number, Task>, iso: string): Task[] {
   for (const t of tasks.values()) {
     if (t.scheduledOn === iso) out.push(t);
   }
-  return out.sort((a, b) => (a.dayPosition ?? 0) - (b.dayPosition ?? 0) || a.id - b.id);
+  return out.sort(
+    (a, b) => (a.dayPosition ?? 0) - (b.dayPosition ?? 0) || a.id - b.id,
+  );
 }
 
 // Сорванные дедлайны — приоритетная категория просрочки.
-export function overdueDeadline(tasks: Map<number, Task>, todayIso: string): Task[] {
+export function overdueDeadline(
+  tasks: Map<number, Task>,
+  todayIso: string,
+): Task[] {
   const out: Task[] = [];
   for (const t of tasks.values()) {
     if (!t.done && t.dueOn !== null && t.dueOn < todayIso) out.push(t);
   }
-  return out.sort((a, b) => (a.dueOn! < b.dueOn! ? -1 : a.dueOn! > b.dueOn! ? 1 : 0) || a.id - b.id);
+  return out.sort(
+    (a, b) =>
+      (a.dueOn! < b.dueOn! ? -1 : a.dueOn! > b.dueOn! ? 1 : 0) || a.id - b.id,
+  );
 }
 
 // Невыполненный план дня; задачи с сорванным дедлайном сюда не попадают —
@@ -105,12 +141,22 @@ export function overdue(tasks: Map<number, Task>, todayIso: string): Task[] {
   const out: Task[] = [];
   for (const t of tasks.values()) {
     const planEnd = t.endOn ?? t.scheduledOn;
-    if (!t.done && planEnd !== null && planEnd < todayIso && !(t.dueOn !== null && t.dueOn < todayIso)) {
+    if (
+      !t.done &&
+      planEnd !== null &&
+      planEnd < todayIso &&
+      !(t.dueOn !== null && t.dueOn < todayIso)
+    ) {
       out.push(t);
     }
   }
   return out.sort(
-    (a, b) => (a.scheduledOn! < b.scheduledOn! ? -1 : a.scheduledOn! > b.scheduledOn! ? 1 : 0) || a.id - b.id,
+    (a, b) =>
+      (a.scheduledOn! < b.scheduledOn!
+        ? -1
+        : a.scheduledOn! > b.scheduledOn!
+          ? 1
+          : 0) || a.id - b.id,
   );
 }
 
@@ -143,7 +189,10 @@ export function subtreeIds(tasks: Map<number, Task>, id: number): number[] {
   return out;
 }
 
-export function childStats(tasks: Map<number, Task>, id: number): { done: number; total: number } {
+export function childStats(
+  tasks: Map<number, Task>,
+  id: number,
+): { done: number; total: number } {
   let done = 0;
   let total = 0;
   for (const t of tasks.values()) {

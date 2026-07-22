@@ -2,9 +2,11 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"time"
 )
 
@@ -32,6 +34,7 @@ type Task struct {
 	AssigneeID  *int64
 	Position    int
 	DayPosition *int
+	Repeat      *string // JSON {"kind":"weekly","days":[1..7]} — правило повтора живой задачи серии
 	CreatedAt   string
 	UpdatedAt   string
 }
@@ -73,9 +76,81 @@ type UpdateReq struct {
 	AssigneeID     *int64
 	Position       *int
 	DayPosition    *int
+	SetRepeat      bool
+	Repeat         *RepeatRule
+	RepeatScope    string // "one" — разовый перенос вхождения серии; иначе серия целиком
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
+
+func todayISO() string { return time.Now().Format("2006-01-02") }
+
+// RepeatRule — еженедельный повтор по дням ISO (1=пн … 7=вс).
+type RepeatRule struct {
+	Kind string `json:"kind"`
+	Days []int  `json:"days"`
+}
+
+func validRepeat(r RepeatRule) error {
+	if r.Kind != "weekly" {
+		return fmt.Errorf("%w: неизвестный вид повтора %q", ErrValidation, r.Kind)
+	}
+	if len(r.Days) == 0 {
+		return fmt.Errorf("%w: повтору нужен хотя бы один день недели", ErrValidation)
+	}
+	seen := map[int]bool{}
+	for _, d := range r.Days {
+		if d < 1 || d > 7 {
+			return fmt.Errorf("%w: день недели вне 1..7", ErrValidation)
+		}
+		if seen[d] {
+			return fmt.Errorf("%w: день недели повторяется", ErrValidation)
+		}
+		seen[d] = true
+	}
+	return nil
+}
+
+func marshalRepeat(r RepeatRule) string {
+	days := append([]int(nil), r.Days...)
+	slices.Sort(days)
+	b, _ := json.Marshal(RepeatRule{Kind: r.Kind, Days: days})
+	return string(b)
+}
+
+func parseRepeat(s string) (RepeatRule, error) {
+	var r RepeatRule
+	if err := json.Unmarshal([]byte(s), &r); err != nil {
+		return r, err
+	}
+	return r, validRepeat(r)
+}
+
+// nextOccurrence — ближайшая дата СТРОГО после from с днём недели из days.
+func nextOccurrence(fromISO string, days []int) string {
+	t, err := time.Parse("2006-01-02", fromISO)
+	if err != nil {
+		return fromISO
+	}
+	for i := 1; i <= 7; i++ {
+		c := t.AddDate(0, 0, i)
+		wd := int(c.Weekday())
+		if wd == 0 {
+			wd = 7 // ISO: воскресенье = 7
+		}
+		if slices.Contains(days, wd) {
+			return c.Format("2006-01-02")
+		}
+	}
+	return fromISO
+}
+
+func maxISO(a, b string) string {
+	if a > b {
+		return a
+	}
+	return b
+}
 
 // validSoftDue: план ≤ мягкий ≤ жёсткий (каждая пара — если обе даты заданы).
 func validSoftDue(scheduled, soft, due *string) error {
@@ -284,6 +359,21 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 
 	affected := map[int64]bool{id: true}
 
+	// повтор: done-переход или разовый перенос спавнят следующее
+	// вхождение; правило при этом переезжает в новую задачу
+	spawnDate, spawnRule := "", ""
+	if cur.Repeat != nil && cur.ScheduledOn != nil {
+		if rule, err := parseRepeat(*cur.Repeat); err == nil {
+			doneFlip := r.Done != nil && *r.Done && !cur.Done
+			moveOne := r.RepeatScope == "one" && r.SetScheduledOn && r.ScheduledOn != nil && !sameDay(r.ScheduledOn, cur.ScheduledOn)
+			if doneFlip || moveOne {
+				spawnDate = nextOccurrence(maxISO(*cur.ScheduledOn, todayISO()), rule.Days)
+				spawnRule = *cur.Repeat
+				cur.Repeat = nil
+			}
+		}
+	}
+
 	// простые поля
 	if r.Title != nil {
 		cur.Title = *r.Title
@@ -311,6 +401,17 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		}
 		cur.TypeID = r.TypeID
 	}
+	if r.SetRepeat {
+		if r.Repeat != nil {
+			if err := validRepeat(*r.Repeat); err != nil {
+				return nil, err
+			}
+			m := marshalRepeat(*r.Repeat)
+			cur.Repeat = &m
+		} else {
+			cur.Repeat = nil
+		}
+	}
 	if r.SetAssigneeID {
 		if r.AssigneeID != nil {
 			if err := refExists(tx, "people", *r.AssigneeID); err != nil {
@@ -337,9 +438,17 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	if cur.EndOn != nil && finalScheduled != nil && *cur.EndOn < *finalScheduled {
 		return nil, fmt.Errorf("%w: конец работы раньше начала", ErrValidation)
 	}
+	if cur.Repeat != nil {
+		if finalScheduled == nil {
+			return nil, fmt.Errorf("%w: повтору нужна дата плана", ErrValidation)
+		}
+		if cur.EndOn != nil {
+			return nil, fmt.Errorf("%w: повтор несовместим с диапазоном работы", ErrValidation)
+		}
+	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, repeat = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, cur.Repeat, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -499,11 +608,81 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		}
 	}
 
+	if spawnDate != "" {
+		final, err := loadOne(tx, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := spawnSeriesCopy(tx, final, spawnRule, spawnDate, affected); err != nil {
+			return nil, err
+		}
+	}
+
 	tasks, err := loadMany(tx, affected)
 	if err != nil {
 		return nil, err
 	}
 	return tasks, tx.Commit()
+}
+
+// spawnSeriesCopy — следующее вхождение серии: копия задачи (описание,
+// тип, исполнитель, правило) на дату dateISO + копия поддерева со
+// сброшенным done и без дат.
+func spawnSeriesCopy(tx *sql.Tx, src Task, rule, dateISO string, affected map[int64]bool) error {
+	sibs, err := siblingIDs(tx, src.ParentID, src.ProjectID, 0)
+	if err != nil {
+		return err
+	}
+	day, err := dayIDs(tx, dateISO, 0)
+	if err != nil {
+		return err
+	}
+	ts := now()
+	res, err := tx.Exec(
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, repeat, type_id, assignee_id, position, day_position, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.TypeID, src.AssigneeID, len(sibs), len(day), ts, ts,
+	)
+	if err != nil {
+		return err
+	}
+	newID, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	affected[newID] = true
+	return copyChildren(tx, src.ID, newID, src.ProjectID, affected)
+}
+
+func copyChildren(tx *sql.Tx, fromParent, toParent, projectID int64, affected map[int64]bool) error {
+	rows, err := tx.Query(taskSelect+` WHERE parent_id = ? ORDER BY position, id`, fromParent)
+	if err != nil {
+		return err
+	}
+	children, err := scanTasks(rows)
+	if err != nil {
+		return err
+	}
+	ts := now()
+	for i, c := range children {
+		res, err := tx.Exec(
+			`INSERT INTO tasks (parent_id, project_id, title, description, done, type_id, assignee_id, position, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+			toParent, projectID, c.Title, c.Description, c.TypeID, c.AssigneeID, i, ts, ts,
+		)
+		if err != nil {
+			return err
+		}
+		newID, err := res.LastInsertId()
+		if err != nil {
+			return err
+		}
+		affected[newID] = true
+		if err := copyChildren(tx, c.ID, newID, projectID, affected); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func DeleteTask(db *sql.DB, id int64) (int, error) {
@@ -563,13 +742,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, repeat, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.Repeat, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

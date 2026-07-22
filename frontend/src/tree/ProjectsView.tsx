@@ -104,7 +104,12 @@ function DragWeekStrip() {
       const el = e.target as HTMLElement | null;
       if (el && el.closest && el.closest(".tree-row")) setVisible(true);
     };
-    const onEnd = () => {
+    const onEnd = (e: Event) => {
+      // drop на саму полоску прячет её ячейка ПОСЛЕ назначения даты:
+      // capture-скрытие размонтировало бы ячейку до её onDrop
+      const el = e.target as HTMLElement | null;
+      if (e.type === "drop" && el && el.closest && el.closest(".dragweek"))
+        return;
       setVisible(false);
       setOver(null);
     };

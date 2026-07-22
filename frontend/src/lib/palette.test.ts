@@ -35,6 +35,7 @@ function task(
     assigneeId: null,
     position: id,
     dayPosition: null,
+    repeat: null,
   };
 }
 
