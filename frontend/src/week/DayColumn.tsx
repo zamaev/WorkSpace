@@ -8,6 +8,7 @@ import {
   tasksOn,
 } from "../data/selectors";
 import { addDays, dayDiff, fmtDayHeader, todayISO } from "../lib/dates";
+import { ghostOccurrences } from "../lib/repeat";
 import {
   getDragTask,
   hasDragTask,
@@ -39,6 +40,13 @@ export function DayColumn({
 
   const list = tasksOn(tasks, day).filter(
     (t) => isTaskVisible(projects, t) && matches(t),
+  );
+  const ghosts = [...tasks.values()].filter(
+    (t) =>
+      t.repeat &&
+      isTaskVisible(projects, t) &&
+      matches(t) &&
+      ghostOccurrences(t, day, day).length > 0,
   );
   const spans = spanTasksOn(tasks, day).filter(
     (t) => isTaskVisible(projects, t) && matches(t),
@@ -164,6 +172,20 @@ export function DayColumn({
           onCardDrop={dropOnCard(t.id)}
           onOpen={onOpen}
         />
+      ))}
+      {ghosts.map((t) => (
+        <div
+          key={`g${t.id}`}
+          className="task-card ghost-card cursor-pointer"
+          style={{
+            borderLeft: `3px solid ${projects.get(t.projectId)?.color ?? "var(--check)"}`,
+          }}
+          title="Будущее вхождение повторяющейся задачи"
+          onClick={() => onOpen(t.id)}
+        >
+          <span className="mmeta flex-none">↻</span>
+          <span className="task-title flex-1 min-w-0 truncate">{t.title}</span>
+        </div>
       ))}
       {project ? (
         <div className="flex items-center gap-2 px-1 pt-1">

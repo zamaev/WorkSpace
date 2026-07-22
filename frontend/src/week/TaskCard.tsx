@@ -60,7 +60,11 @@ export function TaskCard({
           </span>
         )}
       </div>
-      {(crumb || due || task.typeId !== null || task.assigneeId !== null) && (
+      {(crumb ||
+        due ||
+        task.repeat ||
+        task.typeId !== null ||
+        task.assigneeId !== null) && (
         <div className="flex items-center gap-2 pl-[27px] min-w-0">
           {task.assigneeId !== null && people.get(task.assigneeId) && (
             <AvatarDot
@@ -71,6 +75,11 @@ export function TaskCard({
           )}
           {task.typeId !== null && types.get(task.typeId) && (
             <TypeBadge type={types.get(task.typeId)!} size={13} />
+          )}
+          {task.repeat && (
+            <span className="mmeta flex-none" title="Повторяется">
+              ↻
+            </span>
           )}
           {due && (
             <span

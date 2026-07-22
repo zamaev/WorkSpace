@@ -24,6 +24,7 @@ function task(p: Partial<Task>): Task {
     scheduledOn: null,
     endOn: null,
     softDueOn: null,
+    repeat: null,
     dueOn: null,
     typeId: null,
     assigneeId: null,
@@ -57,7 +58,9 @@ describe("дерево", () => {
     expect(breadcrumb(all, a.id)).toBe("");
   });
   it("subtreeIds — узел и все потомки", () => {
-    expect(new Set(subtreeIds(all, a.id))).toEqual(new Set([a.id, a1.id, a2.id, a11.id]));
+    expect(new Set(subtreeIds(all, a.id))).toEqual(
+      new Set([a.id, a1.id, a2.id, a11.id]),
+    );
   });
   it("childStats — только прямые дети", () => {
     expect(childStats(all, a.id)).toEqual({ done: 1, total: 2 });
@@ -69,7 +72,11 @@ describe("дни", () => {
   const m = task({ title: "m", scheduledOn: "2026-07-20", dayPosition: 1 });
   const n = task({ title: "n", scheduledOn: "2026-07-20", dayPosition: 0 });
   const late = task({ title: "late", scheduledOn: "2026-07-10" });
-  const lateDone = task({ title: "lateDone", scheduledOn: "2026-07-10", done: true });
+  const lateDone = task({
+    title: "lateDone",
+    scheduledOn: "2026-07-10",
+    done: true,
+  });
   const today = task({ title: "today", scheduledOn: "2026-07-21" });
   const all = toMap([m, n, late, lateDone, today]);
 
@@ -82,22 +89,38 @@ describe("дни", () => {
     expect(overdue(all, "2026-07-20").map((t) => t.title)).toEqual(["late"]);
   });
   it("overdue — диапазон просрочен по концу работы, не по началу", () => {
-    const running = task({ title: "running", scheduledOn: "2026-07-18", endOn: "2026-07-21" });
-    const finished = task({ title: "finished", scheduledOn: "2026-07-15", endOn: "2026-07-17" });
+    const running = task({
+      title: "running",
+      scheduledOn: "2026-07-18",
+      endOn: "2026-07-21",
+    });
+    const finished = task({
+      title: "finished",
+      scheduledOn: "2026-07-15",
+      endOn: "2026-07-17",
+    });
     const m = toMap([running, finished]);
     expect(overdue(m, "2026-07-20").map((t) => t.title)).toEqual(["finished"]);
   });
 });
 
 describe("многодневные", () => {
-  const span = task({ title: "span", scheduledOn: "2026-07-21", endOn: "2026-07-24" });
+  const span = task({
+    title: "span",
+    scheduledOn: "2026-07-21",
+    endOn: "2026-07-24",
+  });
   const single = task({ title: "single", scheduledOn: "2026-07-22" });
   const all = toMap([span, single]);
 
   it("spanTasksOn — дни диапазона после первого", () => {
     expect(spanTasksOn(all, "2026-07-21").map((t) => t.title)).toEqual([]);
-    expect(spanTasksOn(all, "2026-07-22").map((t) => t.title)).toEqual(["span"]);
-    expect(spanTasksOn(all, "2026-07-24").map((t) => t.title)).toEqual(["span"]);
+    expect(spanTasksOn(all, "2026-07-22").map((t) => t.title)).toEqual([
+      "span",
+    ]);
+    expect(spanTasksOn(all, "2026-07-24").map((t) => t.title)).toEqual([
+      "span",
+    ]);
     expect(spanTasksOn(all, "2026-07-25").map((t) => t.title)).toEqual([]);
   });
   it("tasksOn показывает многодневную только в первый день", () => {
@@ -108,16 +131,29 @@ describe("многодневные", () => {
 
 describe("дедлайны", () => {
   const dueLate = task({ title: "dueLate", dueOn: "2026-07-15" });
-  const dueLateDone = task({ title: "dueLateDone", dueOn: "2026-07-15", done: true });
+  const dueLateDone = task({
+    title: "dueLateDone",
+    dueOn: "2026-07-15",
+    done: true,
+  });
   const dueSoon = task({ title: "dueSoon", dueOn: "2026-07-30" });
-  const both = task({ title: "both", scheduledOn: "2026-07-10", dueOn: "2026-07-12" });
+  const both = task({
+    title: "both",
+    scheduledOn: "2026-07-10",
+    dueOn: "2026-07-12",
+  });
   const planOnly = task({ title: "planOnly", scheduledOn: "2026-07-10" });
   const all = toMap([dueLate, dueLateDone, dueSoon, both, planOnly]);
 
   it("overdueDeadline — несделанные с dueOn < сегодня, по дате", () => {
-    expect(overdueDeadline(all, "2026-07-20").map((t) => t.title)).toEqual(["both", "dueLate"]);
+    expect(overdueDeadline(all, "2026-07-20").map((t) => t.title)).toEqual([
+      "both",
+      "dueLate",
+    ]);
   });
   it("overdue не дублирует задачи с сорванным дедлайном", () => {
-    expect(overdue(all, "2026-07-20").map((t) => t.title)).toEqual(["planOnly"]);
+    expect(overdue(all, "2026-07-20").map((t) => t.title)).toEqual([
+      "planOnly",
+    ]);
   });
 });

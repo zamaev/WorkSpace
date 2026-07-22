@@ -30,6 +30,8 @@ export type Person = {
   position: number;
 };
 
+export type RepeatRule = { kind: "weekly"; days: number[] };
+
 export type Task = {
   id: number;
   parentId: number | null;
@@ -45,6 +47,7 @@ export type Task = {
   assigneeId: number | null;
   position: number;
   dayPosition: number | null;
+  repeat: RepeatRule | null;
 };
 
 // Частичное обновление; null значим для scheduledOn (снять дату)
@@ -63,6 +66,8 @@ export type TaskPatch = Partial<{
   projectId: number;
   position: number;
   dayPosition: number | null;
+  repeat: RepeatRule | null;
+  repeatScope: "one" | "series";
 }>;
 
 export type ProjectPatch = Partial<{

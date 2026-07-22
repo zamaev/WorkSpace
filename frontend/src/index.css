@@ -855,6 +855,19 @@
     z-index: 2;
     touch-action: none;
   }
+  /* призрак будущего вхождения повторяющейся задачи */
+  .g-ghost {
+    position: absolute;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-radius: 3px;
+    border: 1.5px dashed currentColor;
+    opacity: 0.45;
+    z-index: 1;
+    pointer-events: none;
+  }
   /* пунктирный хвост от конца работы до дедлайна */
   .g-tail {
     position: absolute;
@@ -890,6 +903,14 @@
   }
   .swatch-on {
     border-color: var(--text);
+  }
+
+  .ghost-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.55;
+    border-style: dashed !important;
   }
 
   /* ── неделя ── */

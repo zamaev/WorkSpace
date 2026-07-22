@@ -4,6 +4,7 @@ import { useData } from "../data/DataProvider";
 import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { dueChipClass, duePhase } from "../lib/due";
+import { DOW_SHORT, fmtRepeatDays } from "../lib/repeat";
 import { plural } from "../lib/plural";
 import {
   AvatarDot,
@@ -19,7 +20,7 @@ import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker, DueDatePicker } from "./DatePicker";
 import { TypeBadge } from "./TypeBadge";
 
-type PickerKind = "plan" | "due" | "type" | "assignee" | null;
+type PickerKind = "plan" | "due" | "type" | "assignee" | "repeat" | null;
 
 // Детали задачи: панель-инспектор в «Проектах» и модал в «Неделе»/«Ганте».
 // Все меню — маленькие fixed-попапы у якорной кнопки: ничего не смещают
@@ -44,6 +45,7 @@ export function TaskDetails({
   const dueRef = useRef<HTMLButtonElement>(null);
   const typeRef = useRef<HTMLButtonElement>(null);
   const assigneeRef = useRef<HTMLButtonElement>(null);
+  const repeatRef = useRef<HTMLButtonElement>(null);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -223,6 +225,15 @@ export function TaskDetails({
             "исполнитель"
           )}
         </button>
+        <button
+          ref={repeatRef}
+          type="button"
+          className={`chip ${picker === "repeat" ? "chip-accent-border" : task.repeat ? "chip-accent" : ""}`}
+          onClick={() => toggle("repeat")}
+          title="Повтор по дням недели"
+        >
+          {task.repeat ? `↻ ${fmtRepeatDays(task.repeat)}` : "повтор"}
+        </button>
       </div>
 
       {picker === "plan" && (
@@ -247,6 +258,57 @@ export function TaskDetails({
             onPick={(p) => void patch(task.id, p)}
             onClose={() => setPicker(null)}
           />
+        </AnchoredPopover>
+      )}
+      {picker === "repeat" && (
+        <AnchoredPopover anchorRef={repeatRef} onClose={() => setPicker(null)}>
+          <div className="w-[230px]">
+            <div className="mlabel pb-2">Повтор — дни недели</div>
+            {task.scheduledOn === null && (
+              <p className="text-[12px] text-dim m-0 pb-2">
+                Сначала назначь план-день — от него пойдёт серия.
+              </p>
+            )}
+            <div className="flex gap-1 pb-2">
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                const on = task.repeat?.days.includes(d) ?? false;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`seg !px-2 !py-1 !text-[11px] ${on ? "seg-on" : ""}`}
+                    onClick={() => {
+                      const days = on
+                        ? (task.repeat?.days ?? []).filter((x) => x !== d)
+                        : [...(task.repeat?.days ?? []), d].sort(
+                            (a, b) => a - b,
+                          );
+                      void patch(task.id, {
+                        repeat: days.length ? { kind: "weekly", days } : null,
+                      });
+                    }}
+                  >
+                    {DOW_SHORT[d]}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="mmeta">отметка ✓ создаст следующую</span>
+              {task.repeat && (
+                <button
+                  type="button"
+                  className="mmeta !text-over"
+                  onClick={() => {
+                    void patch(task.id, { repeat: null });
+                    setPicker(null);
+                  }}
+                >
+                  Снять
+                </button>
+              )}
+            </div>
+          </div>
         </AnchoredPopover>
       )}
       {picker === "type" && (

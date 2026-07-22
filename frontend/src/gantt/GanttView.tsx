@@ -11,6 +11,7 @@ import { TypeBadge } from "../components/TypeBadge";
 import { useTaskFilters } from "../components/TaskFilters";
 import { useData } from "../data/DataProvider";
 import { uiZoom } from "../lib/zoom";
+import { ghostOccurrences } from "../lib/repeat";
 import {
   childProjects,
   childrenOf,
@@ -57,6 +58,10 @@ type Drag = {
   originX: number;
   delta: number;
 };
+
+function minISO(a: string, b: string): string {
+  return a < b ? a : b;
+}
 
 // Итоговые границы фигуры проекта с учётом drag-превью и клампов resize.
 function applyDrag(
@@ -596,6 +601,16 @@ function ProjectRows({
                 startDrag={startDrag}
                 scale={scale}
               />
+              {task.repeat &&
+                task.scheduledOn &&
+                ghostOccurrences(task, scale.start, minISO(addDays(scale.start, scale.days - 1), addDays(task.scheduledOn, 90))).map((day) => (
+                  <span
+                    key={day}
+                    className="g-ghost"
+                    style={{ left: xOf(scale, day) + DAY_W / 2, color: project.color }}
+                    title={`повтор: ${day}`}
+                  />
+                ))}
             </div>
           </div>
         );

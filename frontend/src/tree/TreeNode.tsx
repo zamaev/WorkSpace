@@ -178,6 +178,11 @@ export function TreeNode({
             {task.title}
           </span>
         )}
+        {task.repeat && (
+          <span className="mmeta flex-none" title="Повторяется">
+            ↻
+          </span>
+        )}
         {task.typeId !== null && types.get(task.typeId) && (
           <TypeBadge type={types.get(task.typeId)!} />
         )}
