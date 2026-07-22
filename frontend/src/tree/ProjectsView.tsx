@@ -443,6 +443,7 @@ function SidebarNode({
   const [picker, setPicker] = useState(false);
   const [adding, setAdding] = useState(false);
   const [childDraft, setChildDraft] = useState("");
+  const [childBusy, setChildBusy] = useState(false);
   const [zone, setZone] = useState<DropZone>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -703,6 +704,7 @@ function SidebarNode({
             placeholder="Под-проект…"
             value={childDraft}
             autoFocus
+            disabled={childBusy}
             onChange={(e) => setChildDraft(e.target.value)}
             onBlur={() => {
               if (!childDraft.trim()) setAdding(false);
@@ -712,12 +714,14 @@ function SidebarNode({
                 setChildDraft("");
                 setAdding(false);
               }
-              if (e.key === "Enter" && childDraft.trim()) {
+              if (e.key === "Enter" && childDraft.trim() && !childBusy) {
+                setChildBusy(true);
                 const p = await createProject(
                   childDraft.trim(),
                   nextColor(projects.size),
                   project.id,
                 );
+                setChildBusy(false);
                 if (p) {
                   setChildDraft("");
                   setAdding(false);

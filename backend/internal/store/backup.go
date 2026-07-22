@@ -10,30 +10,52 @@ import (
 )
 
 // BackupDB кладёт копию файла базы (и -wal, если есть) в подкаталог
-// backups рядом с базой и оставляет keep последних копий. Вызывается до
-// открытия базы — снимок не зависит от миграций текущего запуска.
-func BackupDB(path string, keep int) error {
+// backups рядом с базой и возвращает путь копии. Вызывается до открытия
+// базы — снимок не зависит от миграций текущего запуска. Prune здесь
+// НЕ выполняется: чистить старые копии можно только после успешного
+// открытия, иначе crash-loop на битой базе за десяток рестартов
+// вытеснил бы все исправные бэкапы копиями битого файла.
+func BackupDB(path string, keep int) (string, error) {
 	if path == ":memory:" {
-		return nil
+		return "", nil
 	}
 	if _, err := os.Stat(path); err != nil {
-		return nil // базы ещё нет — бэкапить нечего
+		return "", nil // базы ещё нет — бэкапить нечего
 	}
 	dir := filepath.Join(filepath.Dir(path), "backups")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	stamp := time.Now().Format("20060102-150405")
 	dst := filepath.Join(dir, fmt.Sprintf("workspace-%s.db", stamp))
 	if err := copyFile(path, dst); err != nil {
-		return err
+		return "", err
 	}
 	if _, err := os.Stat(path + "-wal"); err == nil {
 		if err := copyFile(path+"-wal", dst+"-wal"); err != nil {
-			return err
+			return dst, err
 		}
 	}
-	return pruneBackups(dir, keep)
+	return dst, nil
+}
+
+// DropBackup удаляет копию (вызывается, если база не открылась — копия
+// битого файла бэкапом не считается).
+func DropBackup(dst string) {
+	if dst == "" {
+		return
+	}
+	os.Remove(dst)
+	os.Remove(dst + "-wal")
+}
+
+// PruneBackups оставляет keep последних копий; зовётся после успешного
+// открытия базы.
+func PruneBackups(path string, keep int) error {
+	if path == ":memory:" {
+		return nil
+	}
+	return pruneBackups(filepath.Join(filepath.Dir(path), "backups"), keep)
 }
 
 func copyFile(src, dst string) error {

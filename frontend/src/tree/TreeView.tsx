@@ -105,7 +105,7 @@ export function TreeView({
           t.isContentEditable)
       )
         return;
-      if (document.querySelector(".popover, .sheet")) return;
+      if (document.querySelector(".popover, .sheet, .palette")) return;
       const ids: number[] = [];
       const walk = (list: Task[]) => {
         for (const item of list) {

@@ -1134,3 +1134,72 @@ func TestSeriesID(t *testing.T) {
 		t.Error("якорь пропал после снятия правила")
 	}
 }
+
+func TestReviewFixesBatch(t *testing.T) {
+	e := openTest(t)
+
+	// 1. спавн серии не воскрешает soft-deleted подзадачи
+	m := e.mk(t, "серия", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
+		t.Fatal(err)
+	}
+	kid := e.mk(t, "живая", &m.ID, nil)
+	dead := e.mk(t, "удалённая", &m.ID, nil)
+	if _, err := DeleteTask(e.db, dead.ID); err != nil {
+		t.Fatal(err)
+	}
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range out {
+		if x.Title == "удалённая" {
+			t.Error("soft-deleted подзадача воскресла в спавне")
+		}
+	}
+	_ = kid
+
+	// 2. PATCH {done:true, repeat:{...}} одним запросом: правило не остаётся на done
+	m2 := e.mk(t, "двойной", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m2.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, m2.ID, UpdateReq{Done: new(true), SetRepeat: true, Repeat: repeatPtr(1, 2)}); err != nil {
+		t.Fatal(err)
+	}
+	if nm := e.get(t, m2.ID); !nm.Done || nm.Repeat != nil {
+		t.Errorf("done-задача с правилом: %+v", nm)
+	}
+
+	// 3. подзадача в архивном проекте — 422
+	p2, err := CreateProject(e.db, "арх", "#c9a96a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, _, err := CreateTask(e.db, CreateReq{Title: "к", ProjectID: &p2.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateProject(e.db, p2.ID, ProjectUpdate{Archived: new(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "поздно", ParentID: &root.ID}); !errors.Is(err, ErrArchivedTarget) {
+		t.Errorf("создание в архивном: %v", err)
+	}
+
+	// 4. PATCH projectId того же проекта = перенос в корень
+	a := e.mk(t, "родитель2", nil, nil)
+	b := e.mk(t, "дитя2", &a.ID, nil)
+	if _, err := UpdateTask(e.db, b.ID, UpdateReq{SetProjectID: true, ProjectID: &e.pid}); err != nil {
+		t.Fatal(err)
+	}
+	if nb := e.get(t, b.ID); nb.ParentID != nil {
+		t.Errorf("дитя не стало корнем: %+v", nb.ParentID)
+	}
+
+	// 5. PATCH endOn без даты плана — 422
+	c := e.mk(t, "бездаты", nil, nil)
+	if _, err := UpdateTask(e.db, c.ID, UpdateReq{SetEndOn: true, EndOn: new("2030-01-09")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("endOn без плана: %v", err)
+	}
+}

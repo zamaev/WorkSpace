@@ -13,10 +13,13 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [idx, setIdx] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  // прокрутка стрелками двигает список под неподвижным курсором — такие
+  // mouseenter игнорируем, пока мышь реально не шевельнулась
+  const kbNav = useRef(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
         e.preventDefault();
         setOpen((v) => !v);
         setQuery("");
@@ -66,12 +69,14 @@ export function CommandPalette() {
             if (e.key === "Escape") setOpen(false);
             if (e.key === "ArrowDown") {
               e.preventDefault();
+              kbNav.current = true;
               const n = Math.min(active + 1, items.length - 1);
               setIdx(n);
               scrollTo(n);
             }
             if (e.key === "ArrowUp") {
               e.preventDefault();
+              kbNav.current = true;
               const n = Math.max(active - 1, 0);
               setIdx(n);
               scrollTo(n);
@@ -88,7 +93,12 @@ export function CommandPalette() {
               key={`${item.kind}${item.id}`}
               type="button"
               className={`pop-item ${i === active ? "bg-asoft" : ""}`}
-              onMouseEnter={() => setIdx(i)}
+              onMouseEnter={() => {
+                if (!kbNav.current) setIdx(i);
+              }}
+              onMouseMove={() => {
+                kbNav.current = false;
+              }}
               onClick={() => go(item)}
             >
               <span

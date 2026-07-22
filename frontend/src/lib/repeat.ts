@@ -20,14 +20,17 @@ export function ghostOccurrences(
   task: Task,
   from: string,
   to: string,
+  today: string,
 ): string[] {
   if (!task.repeat || !task.scheduledOn || task.done) return [];
+  // спавн на бэке считается строго после max(план, сегодня) — призраки
+  // для просроченной задачи в прошлом и «сегодня» не рисуются
+  const base = task.scheduledOn > today ? task.scheduledOn : today;
   const out: string[] = [];
-  let cur = task.scheduledOn > from ? task.scheduledOn : from;
+  let cur = base > from ? base : from;
   // идём по дням: диапазоны недели/шкалы Ганта короткие
   while (cur <= to) {
-    if (cur > task.scheduledOn && task.repeat.days.includes(isoDow(cur)))
-      out.push(cur);
+    if (cur > base && task.repeat.days.includes(isoDow(cur))) out.push(cur);
     cur = addDays(cur, 1);
   }
   return out;

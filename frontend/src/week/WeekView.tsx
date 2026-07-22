@@ -12,14 +12,16 @@ import {
 import { LAST_PROJECT_KEY } from "../tree/ProjectsView";
 import {
   addDays,
+  dayDiff,
   fmtDayChip,
   fmtWeekRange,
   mondayOf,
   todayISO,
   weekDays,
 } from "../lib/dates";
+import { ghostOccurrences } from "../lib/repeat";
 import { plural } from "../lib/plural";
-import type { Task } from "../data/types";
+import type { Task, TaskPatch } from "../data/types";
 import type { ReactNode } from "react";
 import { DayColumn } from "./DayColumn";
 import { TaskModal } from "../components/TaskDetails";
@@ -184,7 +186,14 @@ export function WeekView() {
   const empty = [...days, ...nextDays].every(
     (d) =>
       ![...tasks.values()].some(
-        (t) => t.scheduledOn === d && isTaskVisible(projects, t),
+        (t) =>
+          isTaskVisible(projects, t) &&
+          (t.scheduledOn === d ||
+            (t.scheduledOn !== null &&
+              t.endOn !== null &&
+              t.scheduledOn <= d &&
+              d <= t.endOn) ||
+            ghostOccurrences(t, d, d, today).length > 0),
       ),
   );
 
@@ -301,17 +310,29 @@ export function WeekView() {
                   <button
                     type="button"
                     className="seg"
-                    onClick={() => void patch(t.id, { scheduledOn: today })}
+                    onClick={() => {
+                      const p: TaskPatch = { scheduledOn: today };
+                      if (t.endOn && t.scheduledOn)
+                        p.endOn = addDays(
+                          today,
+                          dayDiff(t.scheduledOn, t.endOn),
+                        );
+                      if (t.softDueOn && t.softDueOn < today)
+                        p.softDueOn = null;
+                      void patch(t.id, p);
+                    }}
                   >
                     на сегодня
                   </button>
-                  <button
-                    type="button"
-                    className="seg"
-                    onClick={() => void patch(t.id, { scheduledOn: null })}
-                  >
-                    снять дату
-                  </button>
+                  {t.repeat === null && (
+                    <button
+                      type="button"
+                      className="seg"
+                      onClick={() => void patch(t.id, { scheduledOn: null })}
+                    >
+                      снять дату
+                    </button>
+                  )}
                 </OverdueRow>
               ))}
             </div>

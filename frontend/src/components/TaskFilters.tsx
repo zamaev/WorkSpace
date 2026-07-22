@@ -12,16 +12,30 @@ import { TypeBadge } from "./TypeBadge";
 
 // Общий фильтр Недели и Ганта: исполнитель («все», «я», человек) + тип.
 // Возвращает предикат и готовую панель; состояние — в localStorage.
+// Сохранённое значение фильтра валидно, только если указывает на живую
+// запись: после удаления человека/типа (или мусора в localStorage)
+// фильтр молча прятал бы все задачи без индикации.
+export function normalizeFilter(
+  saved: string | null,
+  liveIds: number[],
+): string {
+  if (saved === null || saved === "me" || saved === "all") return "all";
+  const id = Number(saved);
+  return Number.isInteger(id) && liveIds.includes(id) ? saved : "all";
+}
+
 export function useTaskFilters() {
   const { people, types } = useData();
-  // легаси-значение "me" из прежней версии трактуем как «все»
-  const [assignee, setAssignee] = useState<string>(() => {
-    const v = readPref(FILTER_ASSIGNEE_KEY);
-    return v === null || v === "me" ? "all" : v;
-  });
+  const [assignee, setAssignee] = useState<string>(
+    () => readPref(FILTER_ASSIGNEE_KEY) ?? "all",
+  );
   const [type, setType] = useState<string>(
     () => readPref(FILTER_TYPE_KEY) ?? "all",
   );
+  // валидация после загрузки справочников (и на случай удаления во
+  // время сессии — people/types обновляются)
+  const validAssignee = normalizeFilter(assignee, [...people.keys()]);
+  const validType = normalizeFilter(type, [...types.keys()]);
 
   const pickAssignee = (v: string) => {
     setAssignee(v);
@@ -33,12 +47,13 @@ export function useTaskFilters() {
   };
 
   const matches = (t: Task): boolean => {
-    if (assignee !== "all" && t.assigneeId !== Number(assignee)) return false;
-    if (type !== "all" && t.typeId !== Number(type)) return false;
+    if (validAssignee !== "all" && t.assigneeId !== Number(validAssignee))
+      return false;
+    if (validType !== "all" && t.typeId !== Number(validType)) return false;
     return true;
   };
 
-  const active = assignee !== "all" || type !== "all";
+  const active = validAssignee !== "all" || validType !== "all";
 
   const bar = (
     <div className="flex items-center gap-3 flex-wrap">
@@ -46,7 +61,7 @@ export function useTaskFilters() {
         {[...people.values()]
           .sort((a, b) => a.position - b.position || a.id - b.id)
           .map((p) => {
-            const on = assignee === String(p.id);
+            const on = validAssignee === String(p.id);
             return (
               <button
                 key={p.id}
@@ -74,7 +89,7 @@ export function useTaskFilters() {
           {[...types.values()]
             .sort((a, b) => a.position - b.position || a.id - b.id)
             .map((t) => {
-              const on = type === String(t.id);
+              const on = validType === String(t.id);
               return (
                 <button
                   key={t.id}
