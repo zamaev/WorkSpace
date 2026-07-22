@@ -275,18 +275,12 @@ export function TaskDetails({
         <button
           ref={repeatRef}
           type="button"
-          className={`chip ${picker === "repeat" ? "chip-accent-border" : task.repeat ? "chip-accent" : ""}`}
+          className={`chip flex items-center gap-1.5 ${picker === "repeat" ? "chip-accent-border" : task.repeat ? "chip-accent" : ""}`}
           onClick={() => toggle("repeat")}
           title="Повтор по дням недели"
         >
-          {task.repeat ? (
-            <>
-              <RepeatIcon />
-              {fmtRepeatDays(task.repeat)}
-            </>
-          ) : (
-            "повтор"
-          )}
+          <RepeatIcon />
+          {task.repeat ? fmtRepeatDays(task.repeat) : "повтор"}
         </button>
       </div>
 
