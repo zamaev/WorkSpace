@@ -1199,3 +1199,54 @@ func TestSeriesID(t *testing.T) {
 		t.Error("якорь пропал после снятия правила")
 	}
 }
+
+func TestRepeatSpawnSkipsOccupiedDays(t *testing.T) {
+	e := openTest(t)
+	// правило пн/ср: done пн 07 -> спавн ср 09; перенос 09 -> пн 14;
+	// перенос назад ср 16 -> ср 09: пн 14 занят разовым переносом,
+	// спавн должен встать на ср 16
+	m := e.mk(t, "планёрка", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)}); err != nil {
+		t.Fatal(err)
+	}
+	find := func(day string) *Task {
+		t.Helper()
+		all, _ := ListTasks(e.db)
+		for i := range all {
+			if all[i].ScheduledOn != nil && *all[i].ScheduledOn == day && !all[i].Done {
+				return &all[i]
+			}
+		}
+		return nil
+	}
+	wed := find("2030-01-09")
+	if wed == nil {
+		t.Fatal("нет спавна на ср 09")
+	}
+	if _, err := UpdateTask(e.db, wed.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-14")}); err != nil {
+		t.Fatal(err)
+	}
+	liveWed := find("2030-01-16")
+	if liveWed == nil || liveWed.Repeat == nil {
+		t.Fatalf("после переноса серия должна жить на ср 16: %+v", liveWed)
+	}
+	if _, err := UpdateTask(e.db, liveWed.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-09")}); err != nil {
+		t.Fatal(err)
+	}
+	all, _ := ListTasks(e.db)
+	onMon := 0
+	for _, x := range all {
+		if x.ScheduledOn != nil && *x.ScheduledOn == "2030-01-14" {
+			onMon++
+		}
+	}
+	if onMon != 1 {
+		t.Errorf("на занятый пн 14 спавн не должен вставать: %d задач", onMon)
+	}
+	if s2 := find("2030-01-16"); s2 == nil || s2.Repeat == nil {
+		t.Errorf("спавн должен скипнуть занятый пн и встать на ср 16")
+	}
+}

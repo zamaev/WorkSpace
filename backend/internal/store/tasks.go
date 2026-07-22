@@ -378,6 +378,23 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 					base = *r.ScheduledOn
 				}
 				spawnDate = nextOccurrence(maxISO(base, todayISO()), rule.Days)
+				// не приземляемся на день, уже занятый другим живым
+				// вхождением серии (разовые переносы занимают дни)
+				if cur.SeriesID != nil {
+					for range 53 {
+						var n int
+						if err := tx.QueryRow(
+							`SELECT count(*) FROM tasks WHERE series_id = ? AND scheduled_on = ? AND done = 0 AND deleted_at IS NULL AND id != ?`,
+							*cur.SeriesID, spawnDate, id,
+						).Scan(&n); err != nil {
+							return nil, err
+						}
+						if n == 0 {
+							break
+						}
+						spawnDate = nextOccurrence(spawnDate, rule.Days)
+					}
+				}
 				spawnRule = *cur.Repeat
 				cur.Repeat = nil
 			}
