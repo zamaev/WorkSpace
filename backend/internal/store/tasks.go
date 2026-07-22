@@ -369,13 +369,15 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			if doneFlip || moved {
 				// done или перенос: переносится всегда ближайшее
 				// вхождение, серия продолжается по расписанию — спавн
-				// следующего, правило переезжает в него
-				spawnDate = nextOccurrence(maxISO(*cur.ScheduledOn, todayISO()), rule.Days)
-				// перенос ровно на дату следующего вхождения: не
-				// дублируем день — серия продолжается со следующего
-				if moved && spawnDate == *r.ScheduledOn {
-					spawnDate = nextOccurrence(spawnDate, rule.Days)
+				// следующего, правило переезжает в него. База отсчёта:
+				// при переносе — НОВАЯ дата (перенёс назад — серия идёт
+				// от нового числа; дубль исключён «строго после»),
+				// при done — дата вхождения
+				base := *cur.ScheduledOn
+				if moved {
+					base = *r.ScheduledOn
 				}
+				spawnDate = nextOccurrence(maxISO(base, todayISO()), rule.Days)
 				spawnRule = *cur.Repeat
 				cur.Repeat = nil
 			}

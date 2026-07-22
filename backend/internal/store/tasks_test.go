@@ -994,7 +994,7 @@ func TestRepeatMove(t *testing.T) {
 	}
 }
 
-func TestRepeatMoveSkipsCollidingSpawn(t *testing.T) {
+func TestRepeatMoveSpawnsFromNewDate(t *testing.T) {
 	e := openTest(t)
 	// правило пн/ср, живая на пн; перенос пн -> ср (день следующего
 	// вхождения): в среду ровно одна задача, серия с пн следующей недели
@@ -1037,6 +1037,43 @@ func TestRepeatMoveSkipsCollidingSpawn(t *testing.T) {
 	for _, x := range out2 {
 		if x.ID != solo.ID && x.Title == "соло" && (x.ScheduledOn == nil || *x.ScheduledOn != "2030-01-21") {
 			t.Errorf("серия должна продолжиться с пн 21: %+v", x)
+		}
+	}
+}
+
+func TestRepeatMoveBackwardsRebasesSeries(t *testing.T) {
+	e := openTest(t)
+	// правило ср, живая на ср 16; перенос НАЗАД на ср 09: серия идёт от
+	// нового числа — следующее вхождение ср 16
+	m := e.mk(t, "ретро", nil, new("2030-01-16"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(3)}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-09")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spawned *Task
+	for i := range out {
+		if out[i].ID != m.ID && out[i].Title == "ретро" {
+			spawned = &out[i]
+		}
+	}
+	if spawned == nil || *spawned.ScheduledOn != "2030-01-16" || spawned.Repeat == nil {
+		t.Fatalf("серия должна перебазироваться на ср 16: %+v", spawned)
+	}
+	// перенос назад на день не из правила: пт 11 -> следующая ср 16
+	m2 := e.mk(t, "демо", nil, new("2030-01-23"))
+	if _, err := UpdateTask(e.db, m2.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(3)}); err != nil {
+		t.Fatal(err)
+	}
+	out2, err := UpdateTask(e.db, m2.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range out2 {
+		if x.ID != m2.ID && x.Title == "демо" && (x.ScheduledOn == nil || *x.ScheduledOn != "2030-01-16") {
+			t.Errorf("после переноса на пт 11 серия со ср 16: %+v", x)
 		}
 	}
 }
@@ -1162,4 +1199,3 @@ func TestSeriesID(t *testing.T) {
 		t.Error("якорь пропал после снятия правила")
 	}
 }
-

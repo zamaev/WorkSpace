@@ -169,6 +169,22 @@ func TestSeriesLifecycle(t *testing.T) {
 	if moved[0].Repeat != nil || moved[0].SeriesID == nil {
 		t.Errorf("перенесённая: %+v", moved[0])
 	}
+
+	// перенос НАЗАД: живое вхождение ср 16 -> ср 09 неделю раньше;
+	// серия перебазируется — следующее вхождение снова ср 16
+	live := onDate(e.tasks(), "планёрка", "2030-01-16")
+	if len(live) != 1 {
+		t.Fatalf("живое вхождение: %+v", live)
+	}
+	e.patch(live[0].ID, map[string]any{"scheduledOn": "2030-01-09"}, 200)
+	all = e.tasks()
+	rebased := onDate(all, "планёрка", "2030-01-16")
+	if len(rebased) != 1 || rebased[0].Repeat == nil {
+		t.Errorf("после переноса назад серия должна идти от нового числа (след. ср 16): %+v", rebased)
+	}
+	if n := len(onDate(all, "планёрка", "2030-01-09")); n != 1 {
+		t.Errorf("на ср 09 задач: %d, ждал 1", n)
+	}
 }
 
 // Мягкое удаление сквозь HTTP: каскад, невидимость в списках, правило
