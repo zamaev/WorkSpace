@@ -40,7 +40,7 @@ func CreateType(db *sql.DB, name, emoji string) (TaskType, error) {
 	ts := now()
 	res, err := db.Exec(
 		`INSERT INTO task_types (name, emoji, position, created_at, updated_at)
-		 VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM task_types), ?, ?)`,
+		 VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM task_types WHERE deleted_at IS NULL), ?, ?)`,
 		name, emoji, ts, ts,
 	)
 	if err != nil {
@@ -54,7 +54,7 @@ func CreateType(db *sql.DB, name, emoji string) (TaskType, error) {
 }
 
 func ListTypes(db *sql.DB) ([]TaskType, error) {
-	rows, err := db.Query(`SELECT id, name, emoji, position, created_at, updated_at FROM task_types ORDER BY position, id`)
+	rows, err := db.Query(`SELECT id, name, emoji, position, created_at, updated_at FROM task_types WHERE deleted_at IS NULL ORDER BY position, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func DeleteType(db *sql.DB, id int64) error {
 	if _, err := tx.Exec(`UPDATE tasks SET type_id = NULL, updated_at = ? WHERE type_id = ?`, now(), id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM task_types WHERE id = ?`, id); err != nil {
+	if _, err := tx.Exec(`UPDATE task_types SET deleted_at = ? WHERE id = ?`, now(), id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -116,7 +116,7 @@ func DeleteType(db *sql.DB, id int64) error {
 
 func loadType(db *sql.DB, id int64) (TaskType, error) {
 	var t TaskType
-	err := db.QueryRow(`SELECT id, name, emoji, position, created_at, updated_at FROM task_types WHERE id = ?`, id).
+	err := db.QueryRow(`SELECT id, name, emoji, position, created_at, updated_at FROM task_types WHERE id = ? AND deleted_at IS NULL`, id).
 		Scan(&t.ID, &t.Name, &t.Emoji, &t.Position, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TaskType{}, ErrNotFound
@@ -134,7 +134,7 @@ func CreatePerson(db *sql.DB, name, color string) (Person, error) {
 	ts := now()
 	res, err := db.Exec(
 		`INSERT INTO people (name, color, position, created_at, updated_at)
-		 VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM people), ?, ?)`,
+		 VALUES (?, ?, (SELECT COALESCE(MAX(position)+1, 0) FROM people WHERE deleted_at IS NULL), ?, ?)`,
 		name, color, ts, ts,
 	)
 	if err != nil {
@@ -148,7 +148,7 @@ func CreatePerson(db *sql.DB, name, color string) (Person, error) {
 }
 
 func ListPeople(db *sql.DB) ([]Person, error) {
-	rows, err := db.Query(`SELECT id, name, color, role_id, position, created_at, updated_at FROM people ORDER BY position, id`)
+	rows, err := db.Query(`SELECT id, name, color, role_id, position, created_at, updated_at FROM people WHERE deleted_at IS NULL ORDER BY position, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func DeletePerson(db *sql.DB, id int64) error {
 	if _, err := tx.Exec(`DELETE FROM project_members WHERE person_id = ?`, id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM people WHERE id = ?`, id); err != nil {
+	if _, err := tx.Exec(`UPDATE people SET deleted_at = ? WHERE id = ?`, now(), id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -232,7 +232,7 @@ func DeletePerson(db *sql.DB, id int64) error {
 
 func loadPerson(db *sql.DB, id int64) (Person, error) {
 	var p Person
-	err := db.QueryRow(`SELECT id, name, color, role_id, position, created_at, updated_at FROM people WHERE id = ?`, id).
+	err := db.QueryRow(`SELECT id, name, color, role_id, position, created_at, updated_at FROM people WHERE id = ? AND deleted_at IS NULL`, id).
 		Scan(&p.ID, &p.Name, &p.Color, &p.RoleID, &p.Position, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Person{}, ErrNotFound
@@ -242,7 +242,7 @@ func loadPerson(db *sql.DB, id int64) (Person, error) {
 
 func refExists(q querier, table string, id int64) error {
 	var n int
-	if err := q.QueryRow(`SELECT count(*) FROM `+table+` WHERE id = ?`, id).Scan(&n); err != nil {
+	if err := q.QueryRow(`SELECT count(*) FROM `+table+` WHERE id = ? AND deleted_at IS NULL`, id).Scan(&n); err != nil {
 		return err
 	}
 	if n == 0 {
@@ -266,7 +266,7 @@ func CreateRole(db *sql.DB, name string) (Role, error) {
 	ts := now()
 	res, err := db.Exec(
 		`INSERT INTO roles (name, position, created_at, updated_at)
-		 VALUES (?, (SELECT COALESCE(MAX(position)+1, 0) FROM roles), ?, ?)`,
+		 VALUES (?, (SELECT COALESCE(MAX(position)+1, 0) FROM roles WHERE deleted_at IS NULL), ?, ?)`,
 		name, ts, ts,
 	)
 	if err != nil {
@@ -280,7 +280,7 @@ func CreateRole(db *sql.DB, name string) (Role, error) {
 }
 
 func ListRoles(db *sql.DB) ([]Role, error) {
-	rows, err := db.Query(`SELECT id, name, position, created_at, updated_at FROM roles ORDER BY position, id`)
+	rows, err := db.Query(`SELECT id, name, position, created_at, updated_at FROM roles WHERE deleted_at IS NULL ORDER BY position, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func reorderRef(db *sql.DB, table string, id int64, at int) error {
 		return err
 	}
 	defer tx.Rollback()
-	rows, err := tx.Query(`SELECT id FROM `+table+` WHERE id != ? ORDER BY position, id`, id)
+	rows, err := tx.Query(`SELECT id FROM `+table+` WHERE id != ? AND deleted_at IS NULL ORDER BY position, id`, id)
 	if err != nil {
 		return err
 	}
@@ -362,7 +362,7 @@ func DeleteRole(db *sql.DB, id int64) error {
 	if _, err := tx.Exec(`UPDATE people SET role_id = NULL, updated_at = ? WHERE role_id = ?`, now(), id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM roles WHERE id = ?`, id); err != nil {
+	if _, err := tx.Exec(`UPDATE roles SET deleted_at = ? WHERE id = ?`, now(), id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -370,7 +370,7 @@ func DeleteRole(db *sql.DB, id int64) error {
 
 func loadRole(db *sql.DB, id int64) (Role, error) {
 	var r Role
-	err := db.QueryRow(`SELECT id, name, position, created_at, updated_at FROM roles WHERE id = ?`, id).
+	err := db.QueryRow(`SELECT id, name, position, created_at, updated_at FROM roles WHERE id = ? AND deleted_at IS NULL`, id).
 		Scan(&r.ID, &r.Name, &r.Position, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Role{}, ErrNotFound

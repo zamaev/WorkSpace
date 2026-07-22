@@ -996,3 +996,125 @@ func TestRepeatMoveOneAndSeries(t *testing.T) {
 		t.Errorf("серия после переноса: %+v", ns)
 	}
 }
+
+func TestSoftDelete(t *testing.T) {
+	e := openTest(t)
+	a := e.mk(t, "a", nil, new("2030-01-07"))
+	b := e.mk(t, "b", &a.ID, nil)
+	sib := e.mk(t, "sib", nil, nil)
+
+	n, err := DeleteTask(e.db, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("помечено %d, ждал 2 (каскад)", n)
+	}
+	// из списков исчезли, но строки в базе живы с deleted_at
+	all, _ := ListTasks(e.db)
+	if len(all) != 1 || all[0].ID != sib.ID {
+		t.Errorf("список: %+v", all)
+	}
+	var cnt int
+	if err := e.db.QueryRow(`SELECT count(*) FROM tasks WHERE deleted_at IS NOT NULL`).Scan(&cnt); err != nil || cnt != 2 {
+		t.Errorf("deleted_at строк: %d (%v)", cnt, err)
+	}
+	// PATCH по удалённой — 404
+	if _, err := UpdateTask(e.db, b.ID, UpdateReq{Title: new("x")}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("patch по удалённой: %v", err)
+	}
+	// день удалённой освобождён: новая задача в тот же день получает day_position 0
+	c := e.mk(t, "c", nil, new("2030-01-07"))
+	if nc := e.get(t, c.ID); nc.DayPosition == nil || *nc.DayPosition != 0 {
+		t.Errorf("day_position: %v", nc.DayPosition)
+	}
+}
+
+func TestSoftDeleteProjectAndRefs(t *testing.T) {
+	e := openTest(t)
+	// проект с живой задачей не удаляется; после удаления задачи — можно
+	p2, err := CreateProject(e.db, "второй", "#c9a96a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tk, _, err := CreateTask(e.db, CreateReq{Title: "t", ProjectID: &p2.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteProject(e.db, p2.ID); !errors.Is(err, ErrProjectNotEmpty) {
+		t.Errorf("непустой: %v", err)
+	}
+	if _, err := DeleteTask(e.db, tk.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteProject(e.db, p2.ID); err != nil {
+		t.Errorf("после мягкого удаления задачи проект должен удалиться: %v", err)
+	}
+	ps, _ := ListProjects(e.db)
+	for _, p := range ps {
+		if p.ID == p2.ID {
+			t.Error("удалённый проект в списке")
+		}
+	}
+	// тип: пометка + отвязка задач
+	typ, err := CreateType(e.db, "Встреча", "🤝")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := e.mk(t, "a", nil, nil)
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetTypeID: true, TypeID: &typ.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteType(e.db, typ.ID); err != nil {
+		t.Fatal(err)
+	}
+	types, _ := ListTypes(e.db)
+	if len(types) != 0 {
+		t.Errorf("типы: %+v", types)
+	}
+	if na := e.get(t, a.ID); na.TypeID != nil {
+		t.Errorf("задача не отвязана: %v", na.TypeID)
+	}
+}
+
+func TestSeriesID(t *testing.T) {
+	e := openTest(t)
+	m := e.mk(t, "синк", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
+		t.Fatal(err)
+	}
+	if nm := e.get(t, m.ID); nm.SeriesID == nil || *nm.SeriesID != m.ID {
+		t.Fatalf("якорь серии: %v", nm.SeriesID)
+	}
+	// done-спавн наследует series_id
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spawned *Task
+	for i := range out {
+		if out[i].ID != m.ID {
+			spawned = &out[i]
+		}
+	}
+	if spawned == nil || spawned.SeriesID == nil || *spawned.SeriesID != m.ID {
+		t.Fatalf("спавн без якоря: %+v", spawned)
+	}
+	// разовый перенос: обе задачи остаются в серии
+	out2, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11"), RepeatScope: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range out2 {
+		if x.Title == "синк" && (x.SeriesID == nil || *x.SeriesID != m.ID) {
+			t.Errorf("вне серии: %+v", x)
+		}
+	}
+	// снятие правила якорь не трогает
+	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetRepeat: true}); err != nil {
+		t.Fatal(err)
+	}
+	if ns := e.get(t, spawned.ID); ns.SeriesID == nil {
+		t.Error("якорь пропал после снятия правила")
+	}
+}
