@@ -203,7 +203,7 @@ export function TaskDetails({
           type="button"
           className={`chip ${picker === "assignee" ? "chip-accent-border" : ""} flex items-center gap-1.5`}
           onClick={() => toggle("assignee")}
-          title="Исполнитель (пусто — делаю я)"
+          title="Исполнитель"
         >
           {assignee ? (
             <>
