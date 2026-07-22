@@ -1,6 +1,6 @@
 module workspace
 
-go 1.26.5
+go 1.26.0
 
 require modernc.org/sqlite v1.54.0
 
