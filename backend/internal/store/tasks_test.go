@@ -964,45 +964,43 @@ func TestRepeatDoneSpawnsNext(t *testing.T) {
 	_ = s2
 }
 
-func TestRepeatMove(t *testing.T) {
+func TestRepeatMoveNeverSpawns(t *testing.T) {
 	e := openTest(t)
-	m := e.mk(t, "синк", nil, new("2030-01-07")) // пн; правило пн/чт
+	m := e.mk(t, "синк", nil, new("2030-01-14")) // пн; правило пн/чт
 	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
 		t.Fatal(err)
 	}
-	// перенос на вт (не в правиле): текущая на вт без правила, спавн на чт
-	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-08")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	nm := e.get(t, m.ID)
-	if nm.ScheduledOn == nil || *nm.ScheduledOn != "2030-01-08" || nm.Repeat != nil || nm.Done {
-		t.Errorf("текущая после переноса: %+v", nm)
-	}
-	var spawned *Task
-	for i := range out {
-		if out[i].ID != m.ID && out[i].Title == "синк" {
-			spawned = &out[i]
+	// перенос вперёд, назад, на день правила, на чужой день — задача
+	// всегда одна, правило всегда при ней
+	for _, day := range []string{"2030-01-15", "2030-01-10", "2030-01-17", "2030-01-21"} {
+		if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new(day)}); err != nil {
+			t.Fatalf("перенос на %s: %v", day, err)
 		}
-	}
-	if spawned == nil || spawned.ScheduledOn == nil || *spawned.ScheduledOn != "2030-01-10" || spawned.Repeat == nil {
-		t.Fatalf("спавн после переноса: %+v", spawned)
-	}
-	all, _ := ListTasks(e.db)
-	if len(all) != 2 {
-		t.Errorf("задач %d, ждал 2", len(all))
+		all, _ := ListTasks(e.db)
+		if len(all) != 1 {
+			t.Fatalf("после переноса на %s: %d задач, ждал 1", day, len(all))
+		}
+		nm := e.get(t, m.ID)
+		if nm.Repeat == nil || *nm.ScheduledOn != day || nm.Done {
+			t.Fatalf("после переноса на %s: %+v", day, nm)
+		}
 	}
 }
 
-func TestRepeatMoveSpawnsFromNewDate(t *testing.T) {
+func TestRepeatDoneSpawnSkipsOccupiedDay(t *testing.T) {
 	e := openTest(t)
-	// правило пн/ср, живая на пн; перенос пн -> ср (день следующего
-	// вхождения): в среду ровно одна задача, серия с пн следующей недели
+	// legacy-данные: в серии может быть вторая живая задача (дубли
+	// старых версий) — done-спавн не должен вставать на её день.
+	// правило пн/ср, живая пн 07; вторая живая руками на ср 09
 	m := e.mk(t, "планёрка", nil, new("2030-01-07"))
 	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3)}); err != nil {
 		t.Fatal(err)
 	}
-	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-09")})
+	other := e.mk(t, "планёрка (дубль)", nil, new("2030-01-09"))
+	if _, err := e.db.Exec(`UPDATE tasks SET series_id = ? WHERE id = ?`, m.ID, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1012,69 +1010,9 @@ func TestRepeatMoveSpawnsFromNewDate(t *testing.T) {
 			spawned = &out[i]
 		}
 	}
-	if spawned == nil || *spawned.ScheduledOn != "2030-01-14" {
-		t.Fatalf("спавн должен скипнуть занятую среду и встать на пн 14: %+v", spawned)
-	}
-	all, _ := ListTasks(e.db)
-	onWed := 0
-	for _, x := range all {
-		if x.ScheduledOn != nil && *x.ScheduledOn == "2030-01-09" {
-			onWed++
-		}
-	}
-	if onWed != 1 {
-		t.Errorf("в среду %d задач, ждал 1", onWed)
-	}
-	// правило только пн: перенос пн -> пн+7 (слот следующего вхождения)
-	solo := e.mk(t, "соло", nil, new("2030-01-07"))
-	if _, err := UpdateTask(e.db, solo.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
-		t.Fatal(err)
-	}
-	out2, err := UpdateTask(e.db, solo.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-14")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, x := range out2 {
-		if x.ID != solo.ID && x.Title == "соло" && (x.ScheduledOn == nil || *x.ScheduledOn != "2030-01-21") {
-			t.Errorf("серия должна продолжиться с пн 21: %+v", x)
-		}
-	}
-}
-
-func TestRepeatMoveBackwardsRebasesSeries(t *testing.T) {
-	e := openTest(t)
-	// правило ср, живая на ср 16; перенос НАЗАД на ср 09: серия идёт от
-	// нового числа — следующее вхождение ср 16
-	m := e.mk(t, "ретро", nil, new("2030-01-16"))
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(3)}); err != nil {
-		t.Fatal(err)
-	}
-	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-09")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var spawned *Task
-	for i := range out {
-		if out[i].ID != m.ID && out[i].Title == "ретро" {
-			spawned = &out[i]
-		}
-	}
-	if spawned == nil || *spawned.ScheduledOn != "2030-01-16" || spawned.Repeat == nil {
-		t.Fatalf("серия должна перебазироваться на ср 16: %+v", spawned)
-	}
-	// перенос назад на день не из правила: пт 11 -> следующая ср 16
-	m2 := e.mk(t, "демо", nil, new("2030-01-23"))
-	if _, err := UpdateTask(e.db, m2.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(3)}); err != nil {
-		t.Fatal(err)
-	}
-	out2, err := UpdateTask(e.db, m2.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, x := range out2 {
-		if x.ID != m2.ID && x.Title == "демо" && (x.ScheduledOn == nil || *x.ScheduledOn != "2030-01-16") {
-			t.Errorf("после переноса на пт 11 серия со ср 16: %+v", x)
-		}
+	// ср 09 занята дублем — спавн на пн 14
+	if spawned == nil || spawned.ScheduledOn == nil || *spawned.ScheduledOn != "2030-01-14" {
+		t.Fatalf("спавн должен скипнуть занятую ср 09: %+v", spawned)
 	}
 }
 
@@ -1181,15 +1119,12 @@ func TestSeriesID(t *testing.T) {
 	if spawned == nil || spawned.SeriesID == nil || *spawned.SeriesID != m.ID {
 		t.Fatalf("спавн без якоря: %+v", spawned)
 	}
-	// разовый перенос: обе задачи остаются в серии
-	out2, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11")})
-	if err != nil {
+	// перенос спавненной: серия и правило остаются при ней, спавна нет
+	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11")}); err != nil {
 		t.Fatal(err)
 	}
-	for _, x := range out2 {
-		if x.Title == "синк" && (x.SeriesID == nil || *x.SeriesID != m.ID) {
-			t.Errorf("вне серии: %+v", x)
-		}
+	if ns := e.get(t, spawned.ID); ns.SeriesID == nil || *ns.SeriesID != m.ID || ns.Repeat == nil {
+		t.Errorf("после переноса: %+v", ns)
 	}
 	// снятие правила якорь не трогает
 	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetRepeat: true}); err != nil {
@@ -1197,56 +1132,5 @@ func TestSeriesID(t *testing.T) {
 	}
 	if ns := e.get(t, spawned.ID); ns.SeriesID == nil {
 		t.Error("якорь пропал после снятия правила")
-	}
-}
-
-func TestRepeatSpawnSkipsOccupiedDays(t *testing.T) {
-	e := openTest(t)
-	// правило пн/ср: done пн 07 -> спавн ср 09; перенос 09 -> пн 14;
-	// перенос назад ср 16 -> ср 09: пн 14 занят разовым переносом,
-	// спавн должен встать на ср 16
-	m := e.mk(t, "планёрка", nil, new("2030-01-07"))
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3)}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)}); err != nil {
-		t.Fatal(err)
-	}
-	find := func(day string) *Task {
-		t.Helper()
-		all, _ := ListTasks(e.db)
-		for i := range all {
-			if all[i].ScheduledOn != nil && *all[i].ScheduledOn == day && !all[i].Done {
-				return &all[i]
-			}
-		}
-		return nil
-	}
-	wed := find("2030-01-09")
-	if wed == nil {
-		t.Fatal("нет спавна на ср 09")
-	}
-	if _, err := UpdateTask(e.db, wed.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-14")}); err != nil {
-		t.Fatal(err)
-	}
-	liveWed := find("2030-01-16")
-	if liveWed == nil || liveWed.Repeat == nil {
-		t.Fatalf("после переноса серия должна жить на ср 16: %+v", liveWed)
-	}
-	if _, err := UpdateTask(e.db, liveWed.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-09")}); err != nil {
-		t.Fatal(err)
-	}
-	all, _ := ListTasks(e.db)
-	onMon := 0
-	for _, x := range all {
-		if x.ScheduledOn != nil && *x.ScheduledOn == "2030-01-14" {
-			onMon++
-		}
-	}
-	if onMon != 1 {
-		t.Errorf("на занятый пн 14 спавн не должен вставать: %d задач", onMon)
-	}
-	if s2 := find("2030-01-16"); s2 == nil || s2.Repeat == nil {
-		t.Errorf("спавн должен скипнуть занятый пн и встать на ср 16")
 	}
 }

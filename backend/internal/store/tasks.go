@@ -364,20 +364,12 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 	spawnDate, spawnRule := "", ""
 	if cur.Repeat != nil && cur.ScheduledOn != nil {
 		if rule, err := parseRepeat(*cur.Repeat); err == nil {
-			moved := r.SetScheduledOn && r.ScheduledOn != nil && !sameDay(r.ScheduledOn, cur.ScheduledOn)
+			// спавн следующего вхождения — ТОЛЬКО при выполнении.
+			// Перенос повторяющейся ничего не создаёт: правило остаётся
+			// у задачи, будущие вхождения — призраки от новой даты
 			doneFlip := r.Done != nil && *r.Done && !cur.Done
-			if doneFlip || moved {
-				// done или перенос: переносится всегда ближайшее
-				// вхождение, серия продолжается по расписанию — спавн
-				// следующего, правило переезжает в него. База отсчёта:
-				// при переносе — НОВАЯ дата (перенёс назад — серия идёт
-				// от нового числа; дубль исключён «строго после»),
-				// при done — дата вхождения
-				base := *cur.ScheduledOn
-				if moved {
-					base = *r.ScheduledOn
-				}
-				spawnDate = nextOccurrence(maxISO(base, todayISO()), rule.Days)
+			if doneFlip {
+				spawnDate = nextOccurrence(maxISO(*cur.ScheduledOn, todayISO()), rule.Days)
 				// не приземляемся на день, уже занятый другим живым
 				// вхождением серии (разовые переносы занимают дни)
 				if cur.SeriesID != nil {
