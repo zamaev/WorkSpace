@@ -96,6 +96,8 @@ docker compose up --build -d    # приложение на http://localhost:878
 make dev-api    # go run, порт 8787
 make dev-front  # vite dev, проксирует /api на 8787
 make test       # go vet + go test, tsc + vitest
+make build      # фронт + бэк без докера -> bin/workspace
+make run        # собрать и запустить bin/workspace (порт 8787)
 ```
 
 Стек: Go (net/http, modernc.org/sqlite — без CGO), React 19 +
