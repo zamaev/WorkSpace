@@ -130,11 +130,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<Map<number, Role>>(new Map());
   const [members, setMembersState] = useState<Map<number, number[]>>(new Map());
   const [loading, setLoading] = useState(true);
-  // диалог «только эту | всю серию» при переносе повторяющейся задачи
-  const [scopeAsk, setScopeAsk] = useState<{
-    title: string;
-    resolve: (v: "one" | "series" | null) => void;
-  } | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,23 +210,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const snapshot = tasks;
       const cur = tasks.get(id);
       if (!cur) return;
-      // перенос повторяющейся: спросить «только эту | всю серию» —
-      // здесь, чтобы все места смены даты (неделя, полоска, Гант,
-      // календарь) получили это поведение без правок
-      if (
-        cur.repeat !== null &&
-        p.scheduledOn !== undefined &&
-        p.scheduledOn !== null &&
-        p.scheduledOn !== cur.scheduledOn &&
-        p.repeatScope === undefined
-      ) {
-        const scope = await new Promise<"one" | "series" | null>((resolve) =>
-          setScopeAsk({ title: cur.title, resolve }),
-        );
-        setScopeAsk(null);
-        if (scope === null) return;
-        p = { ...p, repeatScope: scope };
-      }
       // локально применяем только собственные поля задачи; каскады и позиции
       // сиблингов придут из ответа
       setTasks((prev) => {
@@ -604,48 +582,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      {scopeAsk && (
-        <>
-          <div
-            className="sheet-overlay"
-            onClick={() => scopeAsk.resolve(null)}
-          />
-          <div
-            className="palette !w-[400px]"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Перенос повторяющейся задачи"
-          >
-            <p className="m-0 pb-3 text-[13.5px]">
-              «{scopeAsk.title}» повторяется. Перенести только это вхождение или
-              всю серию?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                className="seg"
-                onClick={() => scopeAsk.resolve(null)}
-              >
-                отмена
-              </button>
-              <button
-                type="button"
-                className="seg"
-                onClick={() => scopeAsk.resolve("series")}
-              >
-                всю серию
-              </button>
-              <button
-                type="button"
-                className="seg seg-on"
-                onClick={() => scopeAsk.resolve("one")}
-              >
-                только эту
-              </button>
-            </div>
-          </div>
-        </>
-      )}
       {error && <div className="toast">{error}</div>}
     </Ctx.Provider>
   );

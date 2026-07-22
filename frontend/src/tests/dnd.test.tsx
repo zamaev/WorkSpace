@@ -136,7 +136,7 @@ describe("неделя", () => {
     );
   });
 
-  it("перенос повторяющейся спрашивает scope и шлёт repeatScope", async () => {
+  it("перенос повторяющейся уходит сразу, без диалога и repeatScope", async () => {
     const t = demoTask({
       id: 50,
       title: "планёрка",
@@ -155,27 +155,11 @@ describe("неделя", () => {
     const cols = document.querySelectorAll(".day-col");
     fireEvent.drop(cols[cols.length - 1], { dataTransfer: dt });
 
-    // диалог «только эту | всю серию»
-    const one = await screen.findByRole("button", { name: "только эту" });
-    fireEvent.click(one);
     const patch = await waitPatch(log, "/api/tasks/50");
-    expect((patch.body as { repeatScope: string }).repeatScope).toBe("one");
-  });
-
-  it("перенос обычной задачи не спрашивает scope", async () => {
-    const t = demoTask({ id: 60, title: "обычная", scheduledOn: todayISO() });
-    const log = stubApi([t], [demoProject()]);
-    renderAt("/week", "/week/:date?", <WeekView />);
-    const card = (await screen.findByText("обычная")).closest(".task-card")!;
-
-    const dt = new DT();
-    fireEvent.dragStart(card, { dataTransfer: dt });
-    const cols = document.querySelectorAll(".day-col");
-    fireEvent.drop(cols[cols.length - 1], { dataTransfer: dt });
-
-    const patch = await waitPatch(log, "/api/tasks/60");
-    expect(screen.queryByRole("button", { name: "только эту" })).toBeNull();
-    expect((patch.body as Record<string, unknown>).repeatScope).toBeUndefined();
+    expect(screen.queryByRole("dialog", { name: /Перенос/ })).toBeNull();
+    const body = patch.body as Record<string, unknown>;
+    expect(body.repeatScope).toBeUndefined();
+    expect(typeof body.scheduledOn).toBe("string");
   });
 
   it("призрак будущего вхождения виден в своей колонке", async () => {

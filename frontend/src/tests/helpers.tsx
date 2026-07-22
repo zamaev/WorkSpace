@@ -91,11 +91,7 @@ export function stubApi(tasks: Task[], projects: Project[]) {
     const m = path.match(/^\/api\/tasks\/(\d+)$/);
     if (m && method === "PATCH") {
       const cur = byId.get(Number(m[1]))!;
-      const { repeatScope: _scope, ...fields } = body as Record<
-        string,
-        unknown
-      >;
-      const next = { ...cur, ...fields } as Task;
+      const next = { ...cur, ...(body as Record<string, unknown>) } as Task;
       byId.set(cur.id, next);
       return json({ tasks: [next] });
     }
