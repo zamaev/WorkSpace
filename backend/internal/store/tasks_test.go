@@ -1122,3 +1122,62 @@ func TestSeriesID(t *testing.T) {
 		t.Error("якорь пропал после снятия правила")
 	}
 }
+
+func TestRepeatMoveSeriesRewritesRuleDay(t *testing.T) {
+	e := openTest(t)
+	// 2030-01-07 пн; правило пн/ср/пт
+	m := e.mk(t, "синк", nil, new("2030-01-09")) // ср
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3, 5)}); err != nil {
+		t.Fatal(err)
+	}
+	// перенос всей серии со ср на чт: правило пн/чт/пт, спавна нет
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-10"), RepeatScope: "series"}); err != nil {
+		t.Fatal(err)
+	}
+	nm := e.get(t, m.ID)
+	if nm.Repeat == nil || *nm.Repeat != `{"kind":"weekly","days":[1,4,5]}` {
+		t.Errorf("правило после ср→чт: %v", nm.Repeat)
+	}
+	if *nm.ScheduledOn != "2030-01-10" {
+		t.Errorf("дата: %v", nm.ScheduledOn)
+	}
+	all, _ := ListTasks(e.db)
+	if len(all) != 1 {
+		t.Errorf("спавн при series-переносе: %d задач", len(all))
+	}
+	// перенос чт → пт (день уже в правиле): слияние в пн/пт
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11"), RepeatScope: "series"}); err != nil {
+		t.Fatal(err)
+	}
+	if nm := e.get(t, m.ID); *nm.Repeat != `{"kind":"weekly","days":[1,5]}` {
+		t.Errorf("слияние дней: %v", nm.Repeat)
+	}
+	// перенос на ту же неделю вперёд, тот же день недели (пт → пт): правило не меняется
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-18"), RepeatScope: "series"}); err != nil {
+		t.Fatal(err)
+	}
+	if nm := e.get(t, m.ID); *nm.Repeat != `{"kind":"weekly","days":[1,5]}` {
+		t.Errorf("тот же день недели: %v", nm.Repeat)
+	}
+	// пустой scope ведёт себя как series (дефолт)
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-14"), RepeatScope: ""}); err != nil { // пн
+		t.Fatal(err)
+	}
+	// пт(18)→пн(14): пт заменился пн; пн уже был — слияние в [1]
+	if nm := e.get(t, m.ID); *nm.Repeat != `{"kind":"weekly","days":[1]}` {
+		t.Errorf("дефолтный scope: %v", nm.Repeat)
+	}
+	// «только эту» день правила не трогает
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 3)}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-15"), RepeatScope: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range out {
+		if x.ID != m.ID && x.Repeat != nil && *x.Repeat != `{"kind":"weekly","days":[1,3]}` {
+			t.Errorf("one тронул правило: %v", *x.Repeat)
+		}
+	}
+}
