@@ -13,6 +13,7 @@ import { useData } from "../data/DataProvider";
 import { uiZoom } from "../lib/zoom";
 import { ghostOccurrences } from "../lib/repeat";
 import { collapseSeries } from "./series";
+import { ganttTaskRows, hasDate } from "./rows";
 import {
   childProjects,
   childrenOf,
@@ -34,6 +35,10 @@ import {
 } from "./timeline";
 
 const OPEN_KEY = "workspace-gantt-open";
+const TCOLLAPSED_KEY = "workspace-gantt-tcollapsed";
+const HIDE_UNDATED_KEY = "workspace-gantt-hide-undated";
+const NAME_W_KEY = "workspace-gantt-namew";
+const NAME_W_MAX = 480;
 // текст задач начинается там же, где текст имени проекта:
 // паддинг 10 + шеврон 22 + gap 8 + полоска 3 + gap 8
 const TEXT_INDENT = 51;
@@ -42,14 +47,52 @@ const PROJECT_ROW_H = 40;
 const TASK_ROW_H = 30;
 const HEAD_H = 44;
 
-function loadOpen(): Set<number> {
+function loadIdSet(key: string): Set<number> {
   try {
-    const raw = localStorage.getItem(OPEN_KEY);
+    const raw = localStorage.getItem(key);
     if (raw) return new Set(JSON.parse(raw) as number[]);
   } catch {
-    // битый localStorage — стартуем со свёрнутыми проектами
+    // битый localStorage — стартуем с пустым набором
   }
   return new Set();
+}
+
+function loadNameW(): number {
+  try {
+    const raw = localStorage.getItem(NAME_W_KEY);
+    if (raw) return Math.min(NAME_W_MAX, Math.max(NAME_W, Number(raw)));
+  } catch {
+    // недоступный localStorage — дефолтная ширина
+  }
+  return NAME_W;
+}
+
+// Ручка изменения ширины колонки названий (min NAME_W … max NAME_W_MAX).
+function NameResize({ onDelta }: { onDelta: (dx: number) => void }) {
+  const [active, setActive] = useState(false);
+  return (
+    <div
+      className={`g-name-resize ${active ? "col-resize-active" : ""}`}
+      title="Ширина колонки"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setActive(true);
+        let lastX = e.clientX;
+        const z = uiZoom();
+        const onMove = (ev: PointerEvent) => {
+          onDelta((ev.clientX - lastX) / z);
+          lastX = ev.clientX;
+        };
+        const onUp = () => {
+          window.removeEventListener("pointermove", onMove);
+          setActive(false);
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp, { once: true });
+      }}
+    />
+  );
 }
 
 // Активное перетаскивание: превью считается от исходных дат + delta дней.
@@ -172,7 +215,18 @@ export function GanttView() {
   const { tasks, projects, loading, offline, retry, patch, patchProject } =
     useData();
   const today = todayISO();
-  const [open, setOpen] = useState<Set<number>>(loadOpen);
+  const [open, setOpen] = useState<Set<number>>(() => loadIdSet(OPEN_KEY));
+  const [collapsedTasks, setCollapsedTasks] = useState<Set<number>>(() =>
+    loadIdSet(TCOLLAPSED_KEY),
+  );
+  const [hideUndated, setHideUndated] = useState(() => {
+    try {
+      return localStorage.getItem(HIDE_UNDATED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [nameW, setNameW] = useState<number>(loadNameW);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [modalTask, setModalTask] = useState<number | null>(null);
   const { matches, bar: filterBar } = useTaskFilters();
@@ -184,6 +238,43 @@ export function GanttView() {
     }
   });
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const toggleTaskCollapse = (id: number) => {
+    setCollapsedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(TCOLLAPSED_KEY, JSON.stringify([...next]));
+      } catch {
+        // недоступный localStorage — состояние живёт до перезагрузки
+      }
+      return next;
+    });
+  };
+
+  const toggleHideUndated = () => {
+    setHideUndated((v) => {
+      try {
+        localStorage.setItem(HIDE_UNDATED_KEY, v ? "0" : "1");
+      } catch {
+        // приватный режим — состояние не переживёт перезагрузку
+      }
+      return !v;
+    });
+  };
+
+  const resizeName = (dx: number) => {
+    setNameW((w) => {
+      const next = Math.min(NAME_W_MAX, Math.max(NAME_W, Math.round(w + dx)));
+      try {
+        localStorage.setItem(NAME_W_KEY, String(next));
+      } catch {
+        // недоступный localStorage — ширина не переживёт перезагрузку
+      }
+      return next;
+    });
+  };
 
   const toggleArchived = () => {
     setShowArchived((v) => {
@@ -226,10 +317,7 @@ export function GanttView() {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || loading) return;
-    el.scrollLeft = Math.max(
-      0,
-      NAME_W + xOf(scale, today) - el.clientWidth / 3,
-    );
+    el.scrollLeft = Math.max(0, nameW + xOf(scale, today) - el.clientWidth / 3);
     // прокручиваем один раз после загрузки; scale меняется при drag — не дёргаем
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -362,6 +450,14 @@ export function GanttView() {
         <div className="flex gap-2">
           <button
             type="button"
+            className={`seg ${hideUndated ? "seg-on" : ""}`}
+            onClick={toggleHideUndated}
+            title="Скрыть задачи без дат (родитель с датированными потомками остаётся)"
+          >
+            Без дат
+          </button>
+          <button
+            type="button"
             className={`seg ${showArchived ? "seg-on" : ""}`}
             onClick={toggleArchived}
             title="Показывать архивные проекты"
@@ -377,7 +473,7 @@ export function GanttView() {
                 el.scrollTo({
                   left: Math.max(
                     0,
-                    NAME_W + xOf(scale, today) - el.clientWidth / 3,
+                    nameW + xOf(scale, today) - el.clientWidth / 3,
                   ),
                   behavior: "smooth",
                 });
@@ -392,8 +488,9 @@ export function GanttView() {
         <div className="g-canvas">
           {/* шапка: месяцы + числа понедельников */}
           <div className="g-row g-head" style={{ height: HEAD_H }}>
-            <div className="g-name" style={{ width: NAME_W }}>
+            <div className="g-name" style={{ width: nameW }}>
               <MLabel>Проекты</MLabel>
+              <NameResize onDelta={resizeName} />
             </div>
             <div className="g-track" style={{ width: totalW }}>
               <div className="whitespace-nowrap flex">
@@ -403,7 +500,9 @@ export function GanttView() {
                     className="g-month"
                     style={{ width: m.days * DAY_W }}
                   >
-                    <span className="g-month-label">{m.label}</span>
+                    <span className="g-month-label" style={{ left: nameW + 8 }}>
+                      {m.label}
+                    </span>
                   </span>
                 ))}
               </div>
@@ -432,9 +531,13 @@ export function GanttView() {
               tasks={tasks}
               scale={scale}
               totalW={totalW}
+              nameW={nameW}
               weekendBg={weekendBg}
               open={open.has(p.id)}
               toggleOpen={() => toggleOpen(p.id)}
+              hideUndated={hideUndated}
+              collapsedTasks={collapsedTasks}
+              toggleTaskCollapse={toggleTaskCollapse}
               drag={drag}
               startDrag={startDrag}
               undone={projectUndone(tasks, projects, p.id)}
@@ -452,7 +555,7 @@ export function GanttView() {
           {/* линия сегодня — поверх всех строк */}
           <div
             className="g-today"
-            style={{ left: NAME_W + xOf(scale, today) + DAY_W / 2 - 1 }}
+            style={{ left: nameW + xOf(scale, today) + DAY_W / 2 - 1 }}
           />
         </div>
       </div>
@@ -494,9 +597,13 @@ function ProjectRows({
   tasks,
   scale,
   totalW,
+  nameW,
   weekendBg,
   open,
   toggleOpen,
+  hideUndated,
+  collapsedTasks,
+  toggleTaskCollapse,
   drag,
   startDrag,
   undone,
@@ -509,9 +616,13 @@ function ProjectRows({
   tasks: Map<number, Task>;
   scale: Scale;
   totalW: number;
+  nameW: number;
   weekendBg: string;
   open: boolean;
   toggleOpen: () => void;
+  hideUndated: boolean;
+  collapsedTasks: Set<number>;
+  toggleTaskCollapse: (id: number) => void;
   drag: Drag | null;
   startDrag: (
     kind: "project" | "task",
@@ -532,25 +643,24 @@ function ProjectRows({
     project.id,
   );
 
-  const flatAll: { task: Task; depth: number }[] = [];
-  if (open) {
-    const walk = (parentId: number | null, depth: number) => {
-      const children =
-        parentId === null
-          ? rootTasks(tasks, project.id)
-          : childrenOf(tasks, parentId);
-      for (const t of children) {
-        if (taskFilter(t)) flatAll.push({ task: t, depth });
-        // потомки проверяются независимо: отфильтрованный родитель не
-        // прячет подходящих детей
-        walk(t.id, depth + 1);
-      }
-    };
-    walk(null, 0);
-  }
+  // плоский список задач: свёрнутые поддеревья, скрытие без дат, фильтр
+  const grows = open
+    ? ganttTaskRows(
+        rootTasks(tasks, project.id),
+        (id) => childrenOf(tasks, id),
+        {
+          collapsed: (id) => collapsedTasks.has(id),
+          hideUndated,
+          filter: taskFilter,
+        },
+      )
+    : [];
+  const hasChildrenById = new Map(grows.map((r) => [r.task.id, r.hasChildren]));
   // серии повторов — одной строкой на живом носителе; строки и
   // поддеревья прошлых вхождений скрываются
-  const { rows: seriesRows, hiddenSubtreeRoots } = collapseSeries(flatAll);
+  const { rows: seriesRows, hiddenSubtreeRoots } = collapseSeries(
+    grows.map(({ task, depth }) => ({ task, depth })),
+  );
   const hiddenIds = new Set<number>();
   for (const root of hiddenSubtreeRoots) {
     for (const tid of subtreeIds(tasks, root)) hiddenIds.add(tid);
@@ -565,7 +675,7 @@ function ProjectRows({
       >
         <div
           className="g-name"
-          style={{ width: NAME_W, paddingLeft: 10 + depth * 14 }}
+          style={{ width: nameW, paddingLeft: 10 + depth * 14 }}
         >
           <button
             type="button"
@@ -617,13 +727,33 @@ function ProjectRows({
             <div
               className="g-name"
               style={{
-                width: NAME_W,
+                width: nameW,
                 paddingLeft: TEXT_INDENT + (depth + taskDepth) * 14,
               }}
             >
+              {hasChildrenById.get(task.id) && (
+                <button
+                  type="button"
+                  className="g-chevron"
+                  onClick={() => toggleTaskCollapse(task.id)}
+                  aria-label={
+                    collapsedTasks.has(task.id) ? "Развернуть" : "Свернуть"
+                  }
+                >
+                  <span
+                    className={
+                      collapsedTasks.has(task.id)
+                        ? "inline-block"
+                        : "inline-block rotate-90"
+                    }
+                  >
+                    ▶
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
-                className={`flex-1 min-w-0 truncate text-left text-[12.5px] ${task.done ? "text-dim line-through" : ""} ${!task.scheduledOn && !task.dueOn ? "opacity-45" : ""}`}
+                className={`flex-1 min-w-0 truncate text-left text-[12.5px] ${task.done ? "text-dim line-through" : ""} ${!hasDate(task) ? "opacity-45" : ""}`}
                 title={task.title}
                 onClick={() => onOpenTask(task.id)}
               >

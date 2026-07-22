@@ -188,6 +188,48 @@ export function RepeatIcon({ size = 12 }: { size?: number }) {
   );
 }
 
+// Ярлык-тег для чипа типа задачи.
+export function TagIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M1.8 7.4V2.7c0-.5.4-.9.9-.9h4.7l5 5c.35.35.35.9 0 1.25l-3.75 3.75c-.35.35-.9.35-1.25 0L1.8 7.4Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <circle cx="4.7" cy="4.7" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+// Человек (голова + плечи) для чипа исполнителя.
+export function PersonIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="7" cy="4.3" r="2.4" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M2.4 12.2c0-2.6 2.1-4.2 4.6-4.2s4.6 1.6 4.6 4.2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function ArchiveIcon({ size = 13 }: { size?: number }) {
   return (
     <svg
