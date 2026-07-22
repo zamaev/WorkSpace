@@ -12,6 +12,7 @@ import {
   Check,
   FlagIcon,
   MLabel,
+  RepeatIcon,
   SDot,
   TrashIcon,
 } from "./ui";
@@ -232,7 +233,14 @@ export function TaskDetails({
           onClick={() => toggle("repeat")}
           title="Повтор по дням недели"
         >
-          {task.repeat ? `↻ ${fmtRepeatDays(task.repeat)}` : "повтор"}
+          {task.repeat ? (
+            <>
+              <RepeatIcon />
+              {fmtRepeatDays(task.repeat)}
+            </>
+          ) : (
+            "повтор"
+          )}
         </button>
       </div>
 

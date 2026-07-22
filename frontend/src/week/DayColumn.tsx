@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check, SDot } from "../components/ui";
+import { Check, RepeatIcon, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import {
   flattenActiveProjects,
@@ -183,7 +183,9 @@ export function DayColumn({
           title="Будущее вхождение повторяющейся задачи"
           onClick={() => onOpen(t.id)}
         >
-          <span className="mmeta flex-none">↻</span>
+          <span className="text-dim flex-none flex items-center">
+            <RepeatIcon size={11} />
+          </span>
           <span className="task-title flex-1 min-w-0 truncate">{t.title}</span>
         </div>
       ))}

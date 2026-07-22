@@ -1,5 +1,5 @@
 import { type DragEvent } from "react";
-import { AvatarDot, Check } from "../components/ui";
+import { AvatarDot, Check, RepeatIcon } from "../components/ui";
 import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
 import { breadcrumb } from "../data/selectors";
@@ -77,8 +77,11 @@ export function TaskCard({
             <TypeBadge type={types.get(task.typeId)!} size={13} />
           )}
           {task.repeat && (
-            <span className="mmeta flex-none" title="Повторяется">
-              ↻
+            <span
+              className="text-dim flex-none flex items-center"
+              title="Повторяется"
+            >
+              <RepeatIcon size={11} />
             </span>
           )}
           {due && (

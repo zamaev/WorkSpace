@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { AvatarDot, Check, SBar } from "../components/ui";
+import { AvatarDot, Check, RepeatIcon, SBar } from "../components/ui";
 import { TypeBadge } from "../components/TypeBadge";
 import {
   DatePickerPopover,
@@ -179,8 +179,11 @@ export function TreeNode({
           </span>
         )}
         {task.repeat && (
-          <span className="mmeta flex-none" title="Повторяется">
-            ↻
+          <span
+            className="text-dim flex-none flex items-center"
+            title="Повторяется"
+          >
+            <RepeatIcon />
           </span>
         )}
         {task.typeId !== null && types.get(task.typeId) && (

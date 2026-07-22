@@ -168,6 +168,26 @@ export function FlagIcon({ size = 12 }: { size?: number }) {
 }
 
 // Коробка-архив с крышкой.
+export function RepeatIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M11.8 7a4.8 4.8 0 1 1-1.4-3.4M11.9 1.4v2.4H9.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function ArchiveIcon({ size = 13 }: { size?: number }) {
   return (
     <svg
