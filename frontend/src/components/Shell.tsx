@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnchoredPopover } from "./AnchoredPopover";
+import { CommandPalette } from "./CommandPalette";
 import { NavLink, useNavigate } from "react-router-dom";
 
 function applyTheme(theme: "dark" | "light") {
@@ -18,7 +19,10 @@ function initialTheme(): "dark" | "light" {
 // Хоткеи глобальные, но не должны срабатывать при наборе текста.
 function typingTarget(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  return (
+    !!t &&
+    (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
+  );
 }
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -51,19 +55,39 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="topbar">
         <div className="mlabel mlabel-accent">WORKSPACE</div>
         <nav className="flex gap-2">
-          <NavLink to="/projects" title="Проекты — клавиша 1" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink
+            to="/projects"
+            title="Проекты — клавиша 1"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
             Проекты
           </NavLink>
-          <NavLink to="/week" title="Неделя — клавиша 2" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink
+            to="/week"
+            title="Неделя — клавиша 2"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
             Неделя
           </NavLink>
-          <NavLink to="/gantt" title="Гант — клавиша 3" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink
+            to="/gantt"
+            title="Гант — клавиша 3"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
             Гант
           </NavLink>
-          <NavLink to="/team" title="Команда — клавиша 4" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink
+            to="/team"
+            title="Команда — клавиша 4"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
             Команда
           </NavLink>
-          <NavLink to="/types" title="Типы — клавиша 5" className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}>
+          <NavLink
+            to="/types"
+            title="Типы — клавиша 5"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
             Типы
           </NavLink>
         </nav>
@@ -88,27 +112,49 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
         {helpOpen && (
-          <AnchoredPopover anchorRef={helpRef} onClose={() => setHelpOpen(false)}>
+          <AnchoredPopover
+            anchorRef={helpRef}
+            onClose={() => setHelpOpen(false)}
+          >
             <div className="w-[280px] flex flex-col gap-2 text-[12.5px]">
               <div className="mlabel">Клавиши</div>
               <div className="flex flex-col gap-1">
-                <span><span className="mmeta">1–5</span> — Проекты · Неделя · Гант · Команда · Типы</span>
-                <span><span className="mmeta">T</span> — текущая неделя (в «Неделе»)</span>
-                <span><span className="mmeta">Esc</span> — закрыть попап/модал</span>
+                <span>
+                  <span className="mmeta">1–5</span> — Проекты · Неделя · Гант ·
+                  Команда · Типы
+                </span>
+                <span>
+                  <span className="mmeta">⌘K</span> — поиск задач и проектов
+                </span>
+                <span>
+                  <span className="mmeta">↑/↓</span> — по строкам дерева (в
+                  «Проектах»)
+                </span>
+                <span>
+                  <span className="mmeta">T</span> — текущая неделя (в «Неделе»)
+                </span>
+                <span>
+                  <span className="mmeta">Esc</span> — закрыть попап/модал
+                </span>
               </div>
               <div className="mlabel pt-1">Жесты</div>
               <div className="flex flex-col gap-1">
                 <span>Двойной клик по названию — переименовать</span>
                 <span>Удаление: первый клик — «точно?», второй — удалить</span>
-                <span>Дерево: тащи строку — середина «внутрь», край — рядом</span>
+                <span>
+                  Дерево: тащи строку — середина «внутрь», край — рядом
+                </span>
                 <span>Задачу можно бросить на проект в сайдбаре</span>
-                <span>Гант: полосу — двигать, края — тянуть, ромб/флажок — тоже</span>
+                <span>
+                  Гант: полосу — двигать, края — тянуть, ромб/флажок — тоже
+                </span>
                 <span>Границы колонок в «Проектах» перетаскиваются</span>
               </div>
             </div>
           </AnchoredPopover>
         )}
       </header>
+      <CommandPalette />
       {children}
     </div>
   );

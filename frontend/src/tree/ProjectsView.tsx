@@ -106,13 +106,16 @@ function DragWeekStrip() {
       setVisible(false);
       setOver(null);
     };
-    window.addEventListener("dragstart", onStart);
-    window.addEventListener("dragend", onEnd);
-    window.addEventListener("drop", onEnd);
+    // capture: drop в дереве гасится stopPropagation (защита вложенных
+    // зон), а dragend не приходит, если строку перемонтировал React —
+    // capture-фаза window срабатывает раньше любого stopPropagation
+    window.addEventListener("dragstart", onStart, true);
+    window.addEventListener("dragend", onEnd, true);
+    window.addEventListener("drop", onEnd, true);
     return () => {
-      window.removeEventListener("dragstart", onStart);
-      window.removeEventListener("dragend", onEnd);
-      window.removeEventListener("drop", onEnd);
+      window.removeEventListener("dragstart", onStart, true);
+      window.removeEventListener("dragend", onEnd, true);
+      window.removeEventListener("drop", onEnd, true);
     };
   }, []);
 

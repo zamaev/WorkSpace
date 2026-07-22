@@ -21,6 +21,7 @@ type taskJSON struct {
 	Done        bool    `json:"done"`
 	ScheduledOn *string `json:"scheduledOn"`
 	EndOn       *string `json:"endOn"`
+	SoftDueOn   *string `json:"softDueOn"`
 	DueOn       *string `json:"dueOn"`
 	TypeID      *int64  `json:"typeId"`
 	AssigneeID  *int64  `json:"assigneeId"`
@@ -76,6 +77,7 @@ type createBody struct {
 	AssigneeID  *int64  `json:"assigneeId"`
 	ScheduledOn *string `json:"scheduledOn"`
 	EndOn       *string `json:"endOn"`
+	SoftDueOn   *string `json:"softDueOn"`
 	DueOn       *string `json:"dueOn"`
 }
 
@@ -85,6 +87,7 @@ type patchBody struct {
 	Done        Opt[bool]   `json:"done"`
 	ScheduledOn Opt[string] `json:"scheduledOn"`
 	EndOn       Opt[string] `json:"endOn"`
+	SoftDueOn   Opt[string] `json:"softDueOn"`
 	DueOn       Opt[string] `json:"dueOn"`
 	ParentID    Opt[int64]  `json:"parentId"`
 	ProjectID   Opt[int64]  `json:"projectId"`
@@ -436,7 +439,7 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		task, affected, err := store.CreateTask(db, store.CreateReq{
 			Title: b.Title, Description: b.Description, ParentID: b.ParentID,
-			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn, EndOn: b.EndOn, DueOn: b.DueOn,
+			ProjectID: b.ProjectID, ScheduledOn: b.ScheduledOn, EndOn: b.EndOn, SoftDueOn: b.SoftDueOn, DueOn: b.DueOn,
 			TypeID: b.TypeID, AssigneeID: b.AssigneeID,
 		})
 		if err != nil {
@@ -469,6 +472,9 @@ func Handler(db *sql.DB) http.Handler {
 		}
 		if b.EndOn.Set {
 			req.SetEndOn, req.EndOn = true, b.EndOn.Val
+		}
+		if b.SoftDueOn.Set {
+			req.SetSoftDueOn, req.SoftDueOn = true, b.SoftDueOn.Val
 		}
 		if b.DueOn.Set {
 			req.SetDueOn, req.DueOn = true, b.DueOn.Val

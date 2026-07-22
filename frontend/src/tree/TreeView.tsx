@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useData } from "../data/DataProvider";
-import { rootTasks } from "../data/selectors";
-import type { Project } from "../data/types";
+import { childrenOf, rootTasks } from "../data/selectors";
+import type { Project, Task } from "../data/types";
 import { AvatarDot, MLabel } from "../components/ui";
 import { AnchoredPopover } from "../components/AnchoredPopover";
 import { NewTaskInput, TreeNode } from "./TreeNode";
@@ -31,7 +31,9 @@ export function TreeView({
   onSelect: (id: number | null) => void;
 }) {
   const { tasks, people, members, setMembers, create } = useData();
-  const [hideDone, setHideDone] = useState(() => readPref(HIDE_DONE_KEY) === "1");
+  const [hideDone, setHideDone] = useState(
+    () => readPref(HIDE_DONE_KEY) === "1",
+  );
   const toggleHideDone = () => {
     setHideDone((v) => {
       writePref(HIDE_DONE_KEY, v ? null : "1");
@@ -85,7 +87,48 @@ export function TreeView({
     return () => clearTimeout(timer);
   }, [params, tasks, setParams, onSelect]);
 
-  const roots = rootTasks(tasks, project.id).filter((t) => !hideDone || !t.done);
+  const roots = rootTasks(tasks, project.id).filter(
+    (t) => !hideDone || !t.done,
+  );
+
+  // ↑/↓ — переход по видимым строкам (свёрнутые ветки и скрытые done
+  // пропускаются); молчит при наборе текста и открытых попапах/модалах
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      )
+        return;
+      if (document.querySelector(".popover, .sheet")) return;
+      const ids: number[] = [];
+      const walk = (list: Task[]) => {
+        for (const item of list) {
+          if (hideDone && item.done) continue;
+          ids.push(item.id);
+          if (!closed.has(item.id)) walk(childrenOf(tasks, item.id));
+        }
+      };
+      walk(rootTasks(tasks, project.id));
+      if (ids.length === 0) return;
+      e.preventDefault();
+      const idx = selectedId !== null ? ids.indexOf(selectedId) : -1;
+      const next =
+        e.key === "ArrowDown"
+          ? ids[Math.min(idx + 1, ids.length - 1)]
+          : idx === -1
+            ? ids[ids.length - 1]
+            : ids[Math.max(idx - 1, 0)];
+      onSelect(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tasks, project.id, hideDone, closed, selectedId, onSelect]);
 
   return (
     <div className="flex-1 min-w-0 panel px-3 py-3">
@@ -118,7 +161,10 @@ export function TreeView({
           скрыть ✓
         </button>
         {membersOpen && (
-          <AnchoredPopover anchorRef={membersRef} onClose={() => setMembersOpen(false)}>
+          <AnchoredPopover
+            anchorRef={membersRef}
+            onClose={() => setMembersOpen(false)}
+          >
             <div className="flex flex-col gap-0.5 min-w-[190px]">
               <div className="mlabel pb-1">Участники</div>
               {[...people.values()]
@@ -133,7 +179,9 @@ export function TreeView({
                       onClick={() =>
                         void setMembers(
                           project.id,
-                          on ? memberIds.filter((id) => id !== p.id) : [...memberIds, p.id],
+                          on
+                            ? memberIds.filter((id) => id !== p.id)
+                            : [...memberIds, p.id],
                         )
                       }
                     >
@@ -145,13 +193,19 @@ export function TreeView({
                     </button>
                   );
                 })}
-              {people.size === 0 && <p className="text-[12px] text-dim px-2.5 py-1 m-0">Добавь людей в «Команде».</p>}
+              {people.size === 0 && (
+                <p className="text-[12px] text-dim px-2.5 py-1 m-0">
+                  Добавь людей в «Команде».
+                </p>
+              )}
             </div>
           </AnchoredPopover>
         )}
       </div>
       {roots.length === 0 && (
-        <p className="px-3 py-2 text-[13px] text-dim">В проекте пусто. Добавь первую задачу.</p>
+        <p className="px-3 py-2 text-[13px] text-dim">
+          В проекте пусто. Добавь первую задачу.
+        </p>
       )}
       {roots.map((t) => (
         <TreeNode
@@ -171,7 +225,9 @@ export function TreeView({
         depth={0}
         color={project.color}
         placeholder="Новая задача…"
-        onSubmit={async (title) => void (await create({ title, projectId: project.id }))}
+        onSubmit={async (title) =>
+          void (await create({ title, projectId: project.id }))
+        }
       />
     </div>
   );

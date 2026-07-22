@@ -6,6 +6,7 @@ import { breadcrumb } from "../data/selectors";
 import type { Task } from "../data/types";
 import { setDragGhost, setDragTask } from "../tree/dnd";
 import { dayDiff, fmtDayChip, todayISO } from "../lib/dates";
+import { duePhase, duePhaseColor } from "../lib/due";
 
 // Карточка задачи в колонке дня. dropBefore приходит от DayColumn —
 // подсветка «вставить перед этой карточкой».
@@ -25,8 +26,7 @@ export function TaskCard({
   const { tasks, projects, types, people, patch } = useData();
   const crumb = breadcrumb(tasks, task.id);
   const color = projects.get(task.projectId)?.color ?? "var(--check)";
-  const dueOverdue =
-    task.dueOn !== null && !task.done && task.dueOn < todayISO();
+  const due = duePhase(task.softDueOn, task.dueOn, todayISO());
 
   return (
     <div
@@ -60,10 +60,7 @@ export function TaskCard({
           </span>
         )}
       </div>
-      {(crumb ||
-        task.dueOn ||
-        task.typeId !== null ||
-        task.assigneeId !== null) && (
+      {(crumb || due || task.typeId !== null || task.assigneeId !== null) && (
         <div className="flex items-center gap-2 pl-[27px] min-w-0">
           {task.assigneeId !== null && people.get(task.assigneeId) && (
             <AvatarDot
@@ -75,16 +72,14 @@ export function TaskCard({
           {task.typeId !== null && types.get(task.typeId) && (
             <TypeBadge type={types.get(task.typeId)!} size={13} />
           )}
-          {task.dueOn && (
+          {due && (
             <span
               className="mmeta whitespace-nowrap"
-              style={{
-                color: dueOverdue
-                  ? "var(--over)"
-                  : "color-mix(in srgb, var(--over) 65%, var(--dim))",
-              }}
+              style={
+                task.done ? undefined : { color: duePhaseColor(due.phase) }
+              }
             >
-              до {fmtDayChip(task.dueOn)}
+              до {fmtDayChip(due.date)}
             </span>
           )}
           {crumb && <span className="crumb flex-1">{crumb}</span>}

@@ -768,3 +768,45 @@ func TestRefReorder(t *testing.T) {
 		t.Errorf("порядок ролей: %+v", roles)
 	}
 }
+
+func TestSoftDueInvariants(t *testing.T) {
+	e := openTest(t)
+	// create: мягкий позже жёсткого — 422
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "x", ProjectID: &e.pid, SoftDueOn: new("2026-07-26"), DueOn: new("2026-07-25")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("create soft>hard: %v", err)
+	}
+	// create: мягкий раньше плана — 422
+	if _, _, err := CreateTask(e.db, CreateReq{Title: "x", ProjectID: &e.pid, ScheduledOn: new("2026-07-25"), SoftDueOn: new("2026-07-24")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("create soft<plan: %v", err)
+	}
+	// happy: план ≤ мягкий ≤ жёсткий
+	a, _, err := CreateTask(e.db, CreateReq{Title: "a", ProjectID: &e.pid, ScheduledOn: new("2026-07-24"), SoftDueOn: new("2026-07-25"), DueOn: new("2026-07-26")})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if na := e.get(t, a.ID); na.SoftDueOn == nil || *na.SoftDueOn != "2026-07-25" {
+		t.Errorf("мягкий не сохранился: %v", na.SoftDueOn)
+	}
+	// patch: жёсткий раньше мягкого — 422
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: new("2026-07-24")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("patch hard<soft: %v", err)
+	}
+	// patch: перенос плана позже мягкого — 422
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2026-07-26")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("patch plan>soft: %v", err)
+	}
+	// снятие мягкого — жёсткий остаётся
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetSoftDueOn: true, SoftDueOn: nil}); err != nil {
+		t.Fatalf("снятие мягкого: %v", err)
+	}
+	if na := e.get(t, a.ID); na.SoftDueOn != nil || na.DueOn == nil {
+		t.Errorf("после снятия: soft=%v hard=%v", na.SoftDueOn, na.DueOn)
+	}
+	// только мягкий, без жёсткого — валидно
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetDueOn: true, DueOn: nil}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetSoftDueOn: true, SoftDueOn: new("2026-07-25")}); err != nil {
+		t.Errorf("только мягкий: %v", err)
+	}
+}

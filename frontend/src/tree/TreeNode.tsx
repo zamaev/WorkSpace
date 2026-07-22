@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { AvatarDot, Check, SBar } from "../components/ui";
 import { TypeBadge } from "../components/TypeBadge";
-import { DatePickerPopover } from "../components/DatePicker";
+import {
+  DatePickerPopover,
+  DueDatePickerPopover,
+} from "../components/DatePicker";
 import { useData } from "../data/DataProvider";
 import { childrenOf, subtreeIds } from "../data/selectors";
 import type { Task } from "../data/types";
 import { fmtDayChip, todayISO } from "../lib/dates";
+import { dueChipClass, duePhase } from "../lib/due";
 import { getDragTask, hasDragTask, setDragGhost, setDragTask } from "./dnd";
 
 type DropZone = "before" | "into" | "after" | null;
@@ -46,13 +50,19 @@ export function TreeNode({
   const today = todayISO();
   const chipOverdue =
     task.scheduledOn !== null && !task.done && task.scheduledOn < today;
-  const dueOverdue = task.dueOn !== null && !task.done && task.dueOn < today;
+  const due = duePhase(task.softDueOn, task.dueOn, today);
 
   useEffect(() => {
     if (flashId === task.id) {
       rowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [flashId, task.id]);
+
+  useEffect(() => {
+    if (selectedId === task.id) {
+      rowRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [selectedId, task.id]);
 
   const computeZone = (e: DragEvent): DropZone => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -206,24 +216,30 @@ export function TreeNode({
           )}
         </div>
         <div className="relative">
-          {task.dueOn ? (
+          {due ? (
             <button
               type="button"
-              className={`chip ${dueOverdue ? "chip-due-hard" : "chip-due"}`}
+              className={`chip ${task.done ? "" : dueChipClass(due.phase)}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setDueMenu((v) => !v);
               }}
-              title={dueOverdue ? "Дедлайн сорван" : "Изменить дедлайн"}
+              title={
+                due.phase === "over"
+                  ? "Дедлайн сорван"
+                  : due.phase === "warn"
+                    ? "Мягкий рубеж позади — жёсткий впереди"
+                    : "Ближайший рубеж дедлайна"
+              }
             >
-              {fmtDayChip(task.dueOn)}
+              {fmtDayChip(due.date)}
             </button>
           ) : null}
           {dueMenu && (
-            <DatePickerPopover
-              value={task.dueOn}
-              title="Дедлайн"
-              onChange={(start) => void patch(task.id, { dueOn: start })}
+            <DueDatePickerPopover
+              soft={task.softDueOn}
+              hard={task.dueOn}
+              onPick={(p) => void patch(task.id, p)}
               onClose={() => setDueMenu(false)}
             />
           )}
