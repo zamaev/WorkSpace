@@ -618,7 +618,7 @@ function ProjectRows({
                   style={{
                     left: xOf(scale, o.date) + DAY_W / 2,
                     background: project.color,
-                    opacity: 0.35,
+                    opacity: o.done ? 0.35 : 0.8,
                   }}
                   title={`прошлое вхождение: ${o.date}`}
                 />
