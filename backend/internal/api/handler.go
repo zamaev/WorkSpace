@@ -13,22 +13,28 @@ import (
 
 // taskJSON — проводной формат задачи (camelCase, как ждёт фронт).
 type taskJSON struct {
-	ID          int64   `json:"id"`
-	ParentID    *int64  `json:"parentId"`
-	ProjectID   int64   `json:"projectId"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Done        bool    `json:"done"`
-	ScheduledOn *string `json:"scheduledOn"`
-	EndOn       *string `json:"endOn"`
-	SoftDueOn   *string `json:"softDueOn"`
-	DueOn       *string `json:"dueOn"`
-	TypeID      *int64  `json:"typeId"`
-	AssigneeID  *int64  `json:"assigneeId"`
-	Position    int     `json:"position"`
-	DayPosition *int    `json:"dayPosition"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID          int64       `json:"id"`
+	ParentID    *int64      `json:"parentId"`
+	ProjectID   int64       `json:"projectId"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Done        bool        `json:"done"`
+	ScheduledOn *string     `json:"scheduledOn"`
+	EndOn       *string     `json:"endOn"`
+	SoftDueOn   *string     `json:"softDueOn"`
+	DueOn       *string     `json:"dueOn"`
+	TypeID      *int64      `json:"typeId"`
+	AssigneeID  *int64      `json:"assigneeId"`
+	Position    int         `json:"position"`
+	DayPosition *int        `json:"dayPosition"`
+	Repeat      *repeatJSON `json:"repeat"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
+}
+
+type repeatJSON struct {
+	Kind string `json:"kind"`
+	Days []int  `json:"days"`
 }
 
 type projectJSON struct {
@@ -45,7 +51,22 @@ type projectJSON struct {
 }
 
 func toJSON(t store.Task) taskJSON {
-	return taskJSON(t)
+	j := taskJSON{
+		ID: t.ID, ParentID: t.ParentID, ProjectID: t.ProjectID,
+		Title: t.Title, Description: t.Description, Done: t.Done,
+		ScheduledOn: t.ScheduledOn, EndOn: t.EndOn, SoftDueOn: t.SoftDueOn, DueOn: t.DueOn,
+		TypeID: t.TypeID, AssigneeID: t.AssigneeID,
+		Position: t.Position, DayPosition: t.DayPosition,
+		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+	}
+	// в БД правило хранится строкой JSON — наружу отдаём объектом
+	if t.Repeat != nil {
+		var r repeatJSON
+		if err := json.Unmarshal([]byte(*t.Repeat), &r); err == nil {
+			j.Repeat = &r
+		}
+	}
+	return j
 }
 
 func toJSONList(ts []store.Task) []taskJSON {
@@ -82,19 +103,21 @@ type createBody struct {
 }
 
 type patchBody struct {
-	Title       Opt[string] `json:"title"`
-	Description Opt[string] `json:"description"`
-	Done        Opt[bool]   `json:"done"`
-	ScheduledOn Opt[string] `json:"scheduledOn"`
-	EndOn       Opt[string] `json:"endOn"`
-	SoftDueOn   Opt[string] `json:"softDueOn"`
-	DueOn       Opt[string] `json:"dueOn"`
-	ParentID    Opt[int64]  `json:"parentId"`
-	ProjectID   Opt[int64]  `json:"projectId"`
-	TypeID      Opt[int64]  `json:"typeId"`
-	AssigneeID  Opt[int64]  `json:"assigneeId"`
-	Position    Opt[int]    `json:"position"`
-	DayPosition Opt[int]    `json:"dayPosition"`
+	Title       Opt[string]     `json:"title"`
+	Description Opt[string]     `json:"description"`
+	Done        Opt[bool]       `json:"done"`
+	ScheduledOn Opt[string]     `json:"scheduledOn"`
+	EndOn       Opt[string]     `json:"endOn"`
+	SoftDueOn   Opt[string]     `json:"softDueOn"`
+	DueOn       Opt[string]     `json:"dueOn"`
+	ParentID    Opt[int64]      `json:"parentId"`
+	ProjectID   Opt[int64]      `json:"projectId"`
+	TypeID      Opt[int64]      `json:"typeId"`
+	AssigneeID  Opt[int64]      `json:"assigneeId"`
+	Position    Opt[int]        `json:"position"`
+	DayPosition Opt[int]        `json:"dayPosition"`
+	Repeat      Opt[repeatJSON] `json:"repeat"`
+	RepeatScope string          `json:"repeatScope"`
 }
 
 type projectBody struct {
@@ -476,6 +499,13 @@ func Handler(db *sql.DB) http.Handler {
 		if b.SoftDueOn.Set {
 			req.SetSoftDueOn, req.SoftDueOn = true, b.SoftDueOn.Val
 		}
+		if b.Repeat.Set {
+			req.SetRepeat = true
+			if b.Repeat.Val != nil {
+				req.Repeat = &store.RepeatRule{Kind: b.Repeat.Val.Kind, Days: b.Repeat.Val.Days}
+			}
+		}
+		req.RepeatScope = b.RepeatScope
 		if b.DueOn.Set {
 			req.SetDueOn, req.DueOn = true, b.DueOn.Val
 		}

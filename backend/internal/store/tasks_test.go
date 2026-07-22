@@ -810,3 +810,189 @@ func TestSoftDueInvariants(t *testing.T) {
 		t.Errorf("только мягкий: %v", err)
 	}
 }
+
+// Даты повторов — в далёком будущем, чтобы max(дата, сегодня) был
+// детерминирован и не зависел от реального «сегодня».
+// 2030-01-07 — понедельник.
+func repeatPtr(days ...int) *RepeatRule { return &RepeatRule{Kind: "weekly", Days: days} }
+
+func TestNextOccurrence(t *testing.T) {
+	cases := []struct{ from string; days []int; want string }{
+		{"2030-01-07", []int{1}, "2030-01-14"},       // строго после: тот же пн не считается
+		{"2030-01-07", []int{1, 4}, "2030-01-10"},    // ближайший чт
+		{"2030-01-06", []int{1, 4}, "2030-01-07"},    // с вс на пн
+		{"2030-01-10", []int{1, 4}, "2030-01-14"},    // с чт на пн следующей недели
+		{"2030-01-07", []int{7}, "2030-01-13"},       // воскресенье = 7
+	}
+	for _, c := range cases {
+		if got := nextOccurrence(c.from, c.days); got != c.want {
+			t.Errorf("nextOccurrence(%s,%v) = %s, want %s", c.from, c.days, got, c.want)
+		}
+	}
+}
+
+func TestRepeatValidation(t *testing.T) {
+	e := openTest(t)
+	a := e.mk(t, "a", nil, nil)
+	// без даты плана — 422
+	if _, err := UpdateTask(e.db, a.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); !errors.Is(err, ErrValidation) {
+		t.Errorf("повтор без плана: %v", err)
+	}
+	// с диапазоном — 422
+	b, _, err := CreateTask(e.db, CreateReq{Title: "b", ProjectID: &e.pid, ScheduledOn: new("2030-01-07"), EndOn: new("2030-01-09")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, b.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); !errors.Is(err, ErrValidation) {
+		t.Errorf("повтор с диапазоном: %v", err)
+	}
+	// кривые дни — 422
+	c := e.mk(t, "c", nil, new("2030-01-07"))
+	for _, days := range [][]int{{}, {0}, {8}, {1, 1}} {
+		if _, err := UpdateTask(e.db, c.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(days...)}); !errors.Is(err, ErrValidation) {
+			t.Errorf("дни %v: %v", days, err)
+		}
+	}
+	// валидная установка: дни нормализуются сортировкой
+	if _, err := UpdateTask(e.db, c.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(4, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	if nc := e.get(t, c.ID); nc.Repeat == nil || *nc.Repeat != `{"kind":"weekly","days":[1,4]}` {
+		t.Errorf("правило: %v", nc.Repeat)
+	}
+	// снятие даты у повторяющейся — 422 (сначала снять повтор)
+	if _, err := UpdateTask(e.db, c.ID, UpdateReq{SetScheduledOn: true}); !errors.Is(err, ErrValidation) {
+		t.Errorf("снятие даты: %v", err)
+	}
+	// снятие повтора
+	if _, err := UpdateTask(e.db, c.ID, UpdateReq{SetRepeat: true}); err != nil {
+		t.Fatal(err)
+	}
+	if nc := e.get(t, c.ID); nc.Repeat != nil {
+		t.Errorf("повтор не снялся: %v", *nc.Repeat)
+	}
+}
+
+func TestRepeatDoneSpawnsNext(t *testing.T) {
+	e := openTest(t)
+	typ, err := CreateType(e.db, "Встреча", "🤝")
+	if err != nil {
+		t.Fatal(err)
+	}
+	person, err := CreatePerson(e.db, "Оля", "#8fb56b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _, err := CreateTask(e.db, CreateReq{Title: "Планёрка", Description: "агенда в вики", ProjectID: &e.pid, ScheduledOn: new("2030-01-07"), TypeID: &typ.ID, AssigneeID: &person.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
+		t.Fatal(err)
+	}
+	// подзадачи-агенда: одна уже done
+	s1 := e.mk(t, "статусы", &m.ID, nil)
+	s2 := e.mk(t, "блокеры", &m.ID, nil)
+	if _, err := UpdateTask(e.db, s1.ID, UpdateReq{Done: new(true)}); err != nil {
+		t.Fatal(err)
+	}
+
+	before, _ := ListTasks(e.db)
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := ListTasks(e.db)
+	if len(after) != len(before)+3 {
+		t.Fatalf("ожидал +3 задачи (копия+2 подзадачи), было %d стало %d", len(before), len(after))
+	}
+	// старая: done, правило снято
+	if om := e.get(t, m.ID); !om.Done || om.Repeat != nil {
+		t.Errorf("старая: done=%v repeat=%v", om.Done, om.Repeat)
+	}
+	// новая: всё перенесено, дата — ближайший чт
+	var spawned *Task
+	for i := range out {
+		if out[i].ID != m.ID && out[i].ParentID == nil && out[i].Title == "Планёрка" {
+			spawned = &out[i]
+		}
+	}
+	if spawned == nil {
+		t.Fatal("копия не найдена в ответе")
+	}
+	if spawned.Description != "агенда в вики" || spawned.TypeID == nil || *spawned.TypeID != typ.ID || spawned.AssigneeID == nil || *spawned.AssigneeID != person.ID {
+		t.Errorf("поля не перенесены: %+v", spawned)
+	}
+	if spawned.ScheduledOn == nil || *spawned.ScheduledOn != "2030-01-10" {
+		t.Errorf("дата копии: %v", spawned.ScheduledOn)
+	}
+	if spawned.Repeat == nil || *spawned.Repeat != `{"kind":"weekly","days":[1,4]}` {
+		t.Errorf("правило не переехало: %v", spawned.Repeat)
+	}
+	if spawned.Done || spawned.DueOn != nil || spawned.EndOn != nil {
+		t.Errorf("копия: done=%v due=%v end=%v", spawned.Done, spawned.DueOn, spawned.EndOn)
+	}
+	// подзадачи скопированы со сброшенным done и без дат
+	kids := 0
+	for _, x := range after {
+		if x.ParentID != nil && *x.ParentID == spawned.ID {
+			kids++
+			if x.Done || x.ScheduledOn != nil {
+				t.Errorf("подзадача копии: %+v", x)
+			}
+		}
+	}
+	if kids != 2 {
+		t.Errorf("подзадач у копии %d, ждал 2", kids)
+	}
+	// идемпотентность: повторный done=true не спавнит
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)}); err != nil {
+		t.Fatal(err)
+	}
+	// снятие done не спавнит и не возвращает правило
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(false)}); err != nil {
+		t.Fatal(err)
+	}
+	final, _ := ListTasks(e.db)
+	if len(final) != len(after) {
+		t.Errorf("дубли: было %d стало %d", len(after), len(final))
+	}
+	_ = s2
+}
+
+func TestRepeatMoveOneAndSeries(t *testing.T) {
+	e := openTest(t)
+	m := e.mk(t, "синк", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
+		t.Fatal(err)
+	}
+	// разовый перенос: текущая на новую дату без правила, спавн на чт
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-08"), RepeatScope: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nm := e.get(t, m.ID)
+	if nm.ScheduledOn == nil || *nm.ScheduledOn != "2030-01-08" || nm.Repeat != nil || nm.Done {
+		t.Errorf("текущая после one: %+v", nm)
+	}
+	var spawned *Task
+	for i := range out {
+		if out[i].ID != m.ID && out[i].Title == "синк" {
+			spawned = &out[i]
+		}
+	}
+	if spawned == nil || spawned.ScheduledOn == nil || *spawned.ScheduledOn != "2030-01-10" || spawned.Repeat == nil {
+		t.Fatalf("спавн после one: %+v", spawned)
+	}
+	// перенос серии: правило остаётся, новых задач нет
+	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11"), RepeatScope: "series"}); err != nil {
+		t.Fatal(err)
+	}
+	all, _ := ListTasks(e.db)
+	if len(all) != 2 {
+		t.Errorf("задач %d, ждал 2", len(all))
+	}
+	if ns := e.get(t, spawned.ID); ns.Repeat == nil || *ns.ScheduledOn != "2030-01-11" {
+		t.Errorf("серия после переноса: %+v", ns)
+	}
+}
