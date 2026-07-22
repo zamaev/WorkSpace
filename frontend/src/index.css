@@ -726,6 +726,35 @@
     position: relative;
     flex: none;
   }
+  /* шеврон свёртки задачи — в левом жёлобе, чтобы не сдвигать текст */
+  .g-chevron {
+    flex: none;
+    width: 16px;
+    margin-left: -18px;
+    color: var(--dim);
+    font-size: 9px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .g-chevron:hover {
+    color: var(--text);
+  }
+  /* ручка изменения ширины колонки названий — у правого края шапки */
+  .g-name-resize {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    border-radius: 4px;
+    z-index: 5;
+  }
+  .g-name-resize:hover {
+    background: var(--asoft);
+  }
   .g-head .g-name,
   .g-head .g-track {
     border-top: none;

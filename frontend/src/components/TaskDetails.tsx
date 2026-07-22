@@ -12,8 +12,10 @@ import {
   Check,
   FlagIcon,
   MLabel,
+  PersonIcon,
   RepeatIcon,
   SDot,
+  TagIcon,
   TrashIcon,
 } from "./ui";
 import { ConfirmButton } from "./ConfirmButton";
@@ -241,7 +243,10 @@ export function TaskDetails({
               <span className="text-[12px]">{type.name}</span>
             </>
           ) : (
-            "тип"
+            <>
+              <TagIcon />
+              тип
+            </>
           )}
         </button>
         <button
@@ -261,7 +266,10 @@ export function TaskDetails({
               <span className="text-[12px]">{assignee.name}</span>
             </>
           ) : (
-            "исполнитель"
+            <>
+              <PersonIcon />
+              исполнитель
+            </>
           )}
         </button>
         <button
