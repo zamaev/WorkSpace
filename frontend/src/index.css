@@ -948,9 +948,9 @@
     border-color: var(--text);
   }
 
-  /* будущее вхождение серии: то же наполнение, что у живой карточки,
-     отличие только визуальное — пунктирная рамка */
-  .ghost-card {
+  /* продолжение многодневной / вхождение серии: то же наполнение, что у
+     живой карточки, отличие только визуальное — пунктирная рамка */
+  .card-echo {
     border-style: dashed !important;
   }
 
@@ -992,16 +992,6 @@
   }
   .task-card:hover {
     border-color: color-mix(in srgb, var(--text) 18%, transparent);
-  }
-  /* облегчённое «продолжение» многодневной задачи */
-  .span-card {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 9px;
-    border-radius: 9px;
-    border: 1px dashed var(--line);
-    color: var(--dim);
   }
   .task-card-done .task-title {
     color: var(--dim);
