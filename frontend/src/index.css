@@ -528,7 +528,7 @@
     align-items: flex-start;
   }
   .notes-side {
-    width: 280px;
+    width: var(--notes-w, 280px);
     flex: none;
     position: sticky;
     top: 14px;
@@ -553,6 +553,10 @@
     .notes-editor {
       width: 100%;
       min-height: 55vh;
+    }
+    /* ресайз-ручка бессмысленна, когда колонки стоят стопкой */
+    .notes-layout > .col-resize {
+      display: none;
     }
   }
   /* документ-колонка: ограничиваем длину строки для читаемости (~80

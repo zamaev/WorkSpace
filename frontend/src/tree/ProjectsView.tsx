@@ -10,7 +10,7 @@ import {
 import { TaskDetails } from "../components/TaskDetails";
 import { PALETTE, nextColor, type Project } from "../data/types";
 import { getDragTask, hasDragTask, setDragGhost } from "./dnd";
-import { uiZoom } from "../lib/zoom";
+import { ColResize, readWidth } from "../components/ColResize";
 import {
   SELECTED_TASK_KEY,
   TWO_WEEKS_KEY,
@@ -33,42 +33,6 @@ export const LAST_PROJECT_KEY = "workspace-last-project";
 const SIDE_W_KEY = "workspace-col-side";
 const INSP_W_KEY = "workspace-col-inspector";
 
-function readWidth(key: string, def: number, min: number, max: number): number {
-  try {
-    const v = Number(localStorage.getItem(key));
-    if (Number.isFinite(v) && v >= min && v <= max) return v;
-  } catch {
-    // приватный режим — дефолт
-  }
-  return def;
-}
-
-// Ручка изменения ширины колонки: pointer-drag, ширина через колбэк.
-// Сохранение делает сам onDelta: pointerup замыкал бы значение старого рендера.
-function ColResize({ onDelta }: { onDelta: (dx: number) => void }) {
-  const [active, setActive] = useState(false);
-  return (
-    <div
-      className={`col-resize ${active ? "col-resize-active" : ""}`}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        setActive(true);
-        let lastX = e.clientX;
-        const z = uiZoom();
-        const onMove = (ev: PointerEvent) => {
-          onDelta((ev.clientX - lastX) / z);
-          lastX = ev.clientX;
-        };
-        const onUp = () => {
-          window.removeEventListener("pointermove", onMove);
-          setActive(false);
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp, { once: true });
-      }}
-    />
-  );
-}
 const PROJ_MIME = "application/x-workspace-project";
 const PROJ_CLOSED_KEY = "workspace-projects-closed";
 

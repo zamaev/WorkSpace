@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useData } from "../data/DataProvider";
 import { noteChildren, noteSubtreeIds } from "../data/selectors";
@@ -6,10 +13,12 @@ import type { Note } from "../data/types";
 import { MLabel, TrashIcon } from "../components/ui";
 import { NoteEditor } from "./NoteEditor";
 import { ConfirmButton } from "../components/ConfirmButton";
+import { ColResize, readWidth } from "../components/ColResize";
 import { looksLikeHtml, markdownToHtml } from "./migrate";
 
 const NOTE_MIME = "application/x-workspace-note";
 const CLOSED_KEY = "workspace-notes-closed";
+const NOTES_W_KEY = "workspace-col-notes";
 
 function loadClosed(): Set<number> {
   try {
@@ -26,6 +35,8 @@ export function NotesView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const selectedId = id ? Number(id) : null;
+
+  const [sideW, setSideW] = useState(() => readWidth(NOTES_W_KEY, 280, 200, 480));
 
   // разовая миграция markdown → HTML для заметок, созданных до перехода
   // на HTML-хранение; редактор показываем только когда мигрировать нечего
@@ -69,7 +80,10 @@ export function NotesView() {
 
   return (
     <div className="notes-layout">
-      <div className="notes-side panel px-2 py-3">
+      <div
+        className="notes-side panel px-2 py-3"
+        style={{ ["--notes-w"]: `${sideW}px` } as CSSProperties}
+      >
         <div className="flex items-center justify-between px-2 pb-2">
           <MLabel>Заметки</MLabel>
           <button
@@ -97,6 +111,20 @@ export function NotesView() {
           />
         ))}
       </div>
+
+      <ColResize
+        onDelta={(dx) =>
+          setSideW((w) => {
+            const nw = Math.min(480, Math.max(200, w + dx));
+            try {
+              localStorage.setItem(NOTES_W_KEY, String(nw));
+            } catch {
+              // приватный режим — ширина до перезагрузки
+            }
+            return nw;
+          })
+        }
+      />
 
       {selected && !needsMigration ? (
         <NoteEditor key={selected.id} note={selected} />
