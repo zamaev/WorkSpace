@@ -631,6 +631,54 @@
       display: none;
     }
   }
+  /* wiki-ссылка на другую заметку */
+  .ProseMirror .wiki-link {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    padding: 0 4px;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ProseMirror .wiki-link:hover {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+  /* поповер автокомплита wiki-ссылок (по «[[») */
+  .wiki-popup {
+    position: fixed;
+    z-index: 100;
+    min-width: 200px;
+    max-width: 300px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    padding: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .wiki-popup-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: 13px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wiki-popup-item:hover,
+  .wiki-popup-item.is-sel {
+    background: var(--asoft);
+  }
+  .wiki-popup-empty {
+    padding: 6px 8px;
+    font-size: 12.5px;
+    color: var(--dim);
+  }
   /* панель форматирования WYSIWYG-редактора */
   .note-toolbar {
     display: flex;

@@ -10,6 +10,7 @@ import { useData } from "../data/DataProvider";
 import { noteAncestors } from "../data/selectors";
 import type { Note } from "../data/types";
 import { MermaidCodeBlock } from "./MermaidCodeBlock";
+import { WikiLink } from "./WikiLink";
 
 type TocItem = { level: number; text: string; index: number };
 
@@ -26,6 +27,11 @@ export function NoteEditor({ note }: { note: Note }) {
   const [title, setTitle] = useState(note.title);
   const path = noteAncestors(notes, note.id);
   const [toc, setToc] = useState<TocItem[]>([]);
+
+  // актуальный список заметок для автокомплита wiki-ссылок (редактор создаётся
+  // один раз — читаем через ref, чтобы видеть свежие заметки)
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<(() => void) | null>(null);
@@ -50,6 +56,9 @@ export function NoteEditor({ note }: { note: Note }) {
       MermaidCodeBlock,
       TaskList,
       TaskItem.configure({ nested: true }),
+      WikiLink.configure({
+        getNotes: () => [...notesRef.current.values()],
+      }),
       Placeholder.configure({
         placeholder:
           "Пиши здесь… # заголовок, **жирный**, - список, > цитата, ```mermaid — диаграмма",
@@ -175,7 +184,15 @@ export function NoteEditor({ note }: { note: Note }) {
           }
         }}
         onClickCapture={(e) => {
-          // ⌘/Ctrl-клик по ссылке — открыть в новой вкладке
+          // клик по wiki-ссылке — переход к заметке внутри приложения
+          const wiki = (e.target as HTMLElement).closest("[data-wikilink]");
+          if (wiki) {
+            e.preventDefault();
+            const nid = wiki.getAttribute("data-wikilink");
+            if (nid) navigate(`/notes/${nid}`);
+            return;
+          }
+          // ⌘/Ctrl-клик по обычной ссылке — открыть в новой вкладке
           if (!(e.metaKey || e.ctrlKey)) return;
           const a = (e.target as HTMLElement).closest("a");
           const href = a?.getAttribute("href");
