@@ -30,6 +30,23 @@ function loadClosed(): Set<number> {
   return new Set();
 }
 
+// текст заметки без HTML-тегов — для полнотекстового поиска
+function notePlainText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// фрагмент текста вокруг совпадения — сниппет в результатах поиска
+function snippet(text: string, q: string): string {
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return text.slice(0, 80);
+  const start = Math.max(0, i - 30);
+  return (start > 0 ? "…" : "") + text.slice(start, start + 90).trim() + "…";
+}
+
 export function NotesView() {
   const { notes, createNote, patchNote } = useData();
   const { id } = useParams();
@@ -37,6 +54,7 @@ export function NotesView() {
   const selectedId = id ? Number(id) : null;
 
   const [sideW, setSideW] = useState(() => readWidth(NOTES_W_KEY, 280, 200, 480));
+  const [query, setQuery] = useState("");
 
   // разовая миграция markdown → HTML для заметок, созданных до перехода
   // на HTML-хранение; редактор показываем только когда мигрировать нечего
@@ -95,21 +113,38 @@ export function NotesView() {
             ＋
           </button>
         </div>
-        {roots.length === 0 && (
-          <p className="px-2 py-2 text-[13px] text-dim">
-            Пусто. Создай первую заметку кнопкой ＋.
-          </p>
+        <input
+          className="ghost-input border border-line rounded-[8px] px-2 py-1 text-[13px] w-full mb-2"
+          name="notes-search"
+          aria-label="Поиск по заметкам"
+          placeholder="Поиск…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setQuery("");
+          }}
+        />
+        {query.trim() ? (
+          <NoteSearchResults query={query.trim()} selectedId={selectedId} />
+        ) : (
+          <>
+            {roots.length === 0 && (
+              <p className="px-2 py-2 text-[13px] text-dim">
+                Пусто. Создай первую заметку кнопкой ＋.
+              </p>
+            )}
+            {roots.map((n) => (
+              <NoteNode
+                key={n.id}
+                note={n}
+                depth={0}
+                closed={closed}
+                toggleOpen={toggleOpen}
+                selectedId={selectedId}
+              />
+            ))}
+          </>
         )}
-        {roots.map((n) => (
-          <NoteNode
-            key={n.id}
-            note={n}
-            depth={0}
-            closed={closed}
-            toggleOpen={toggleOpen}
-            selectedId={selectedId}
-          />
-        ))}
       </div>
 
       <ColResize
@@ -135,6 +170,48 @@ export function NotesView() {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// Плоский список результатов полнотекстового поиска (по заголовку и телу).
+function NoteSearchResults({
+  query,
+  selectedId,
+}: {
+  query: string;
+  selectedId: number | null;
+}) {
+  const { notes } = useData();
+  const navigate = useNavigate();
+  const q = query.toLowerCase();
+  const results = [...notes.values()]
+    .map((n) => ({ note: n, text: notePlainText(n.body) }))
+    .filter(
+      ({ note, text }) =>
+        note.title.toLowerCase().includes(q) || text.toLowerCase().includes(q),
+    )
+    .slice(0, 50);
+  if (results.length === 0) {
+    return <p className="px-2 py-2 text-[13px] text-dim">Ничего не найдено.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      {results.map(({ note, text }) => (
+        <button
+          key={note.id}
+          type="button"
+          className={`text-left px-2 py-1.5 rounded-[8px] hover:bg-asoft ${
+            selectedId === note.id ? "bg-asoft" : ""
+          }`}
+          onClick={() => navigate(`/notes/${note.id}`)}
+        >
+          <div className="text-[13.5px] truncate">
+            {note.title.trim() === "" ? "Без названия" : note.title}
+          </div>
+          {text && <div className="mmeta truncate">{snippet(text, query)}</div>}
+        </button>
+      ))}
     </div>
   );
 }
