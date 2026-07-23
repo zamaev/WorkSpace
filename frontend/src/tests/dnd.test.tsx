@@ -148,7 +148,7 @@ describe("неделя", () => {
     // повторяющаяся видна и карточкой, и призраком — берём настоящую
     const card = (await screen.findAllByText("планёрка"))
       .map((el) => el.closest(".task-card")!)
-      .find((c) => !c.classList.contains("ghost-card"))!;
+      .find((c) => !c.classList.contains("card-echo"))!;
 
     const dt = new DT();
     fireEvent.dragStart(card, { dataTransfer: dt });
@@ -174,9 +174,33 @@ describe("неделя", () => {
     renderAt("/week", "/week/:date?", <WeekView />);
     await screen.findAllByText("ежедневный синк");
     await waitFor(() =>
-      expect(document.querySelectorAll(".ghost-card").length).toBeGreaterThan(
+      expect(document.querySelectorAll(".card-echo").length).toBeGreaterThan(
         0,
       ),
     );
+  });
+
+  it("продолжение многодневной не тащится, стартовая — да", async () => {
+    const t = demoTask({
+      id: 80,
+      title: "релиз-марафон",
+      scheduledOn: monday,
+      endOn: addDays(monday, 2),
+    });
+    stubApi([t], [demoProject()]);
+    renderAt("/week", "/week/:date?", <WeekView />);
+    // задача может попасть и в панель «просрочено» (не .task-card) — берём
+    // только карточки дневной сетки
+    const cards = (await screen.findAllByText("релиз-марафон"))
+      .map((el) => el.closest(".task-card"))
+      .filter((c): c is HTMLElement => c !== null);
+    const live = cards.filter((c) => !c.classList.contains("card-echo"));
+    const spans = cards.filter((c) => c.classList.contains("card-echo"));
+    // одна стартовая карточка (первый день) + продолжения в следующие дни
+    expect(live).toHaveLength(1);
+    expect(spans.length).toBeGreaterThan(0);
+    // стартовую можно тащить, продолжения — нет
+    expect(live[0].getAttribute("draggable")).toBe("true");
+    for (const s of spans) expect(s.getAttribute("draggable")).toBe("false");
   });
 });

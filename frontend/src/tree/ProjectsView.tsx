@@ -182,9 +182,14 @@ export function ProjectsView() {
     const raw = readPref(SELECTED_TASK_KEY);
     return raw ? Number(raw) : null;
   });
+  const [focusDescNonce, setFocusDescNonce] = useState(0);
   const setSelected = (id: number | null) => {
     setSelectedState(id);
     writePref(SELECTED_TASK_KEY, id === null ? null : String(id));
+  };
+  const onCreateTask = (id: number) => {
+    setSelected(id);
+    setFocusDescNonce((n) => n + 1);
   };
   const [sideW, setSideW] = useState(() =>
     readWidth(SIDE_W_KEY, 232, 180, 400),
@@ -262,6 +267,7 @@ export function ProjectsView() {
           project={current}
           selectedId={effectiveSelected}
           onSelect={setSelected}
+          onCreateTask={onCreateTask}
         />
       ) : (
         <div className="flex-1 panel px-6 py-8 text-center">
@@ -289,6 +295,7 @@ export function ProjectsView() {
             <TaskDetails
               taskId={effectiveSelected}
               variant="panel"
+              focusDescription={focusDescNonce}
               onClose={() => setSelected(null)}
             />
           ) : (

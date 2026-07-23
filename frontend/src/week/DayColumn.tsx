@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check, RepeatIcon, SDot } from "../components/ui";
+import { SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import {
   flattenActiveProjects,
@@ -9,12 +9,7 @@ import {
 } from "../data/selectors";
 import { addDays, dayDiff, fmtDayHeader, todayISO } from "../lib/dates";
 import { ghostOccurrences } from "../lib/repeat";
-import {
-  getDragTask,
-  hasDragTask,
-  setDragGhost,
-  setDragTask,
-} from "../tree/dnd";
+import { getDragTask, hasDragTask } from "../tree/dnd";
 import { TaskCard } from "./TaskCard";
 
 export function DayColumn({
@@ -30,7 +25,7 @@ export function DayColumn({
   onOpen: (id: number) => void;
   matches: (t: import("../data/types").Task) => boolean;
 }) {
-  const { tasks, projects, create, patch } = useData();
+  const { tasks, projects, create, patch, toast } = useData();
   const [colDrop, setColDrop] = useState(false);
   const [dropBeforeId, setDropBeforeId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -89,6 +84,11 @@ export function DayColumn({
     if (id === null) return;
     const t = tasks.get(id);
     if (!t) return;
+    // повторяющуюся серию нельзя переносить в прошлое (только смена дня)
+    if (t.scheduledOn !== day && t.repeat && day < today) {
+      toast("Повторяющуюся задачу нельзя переносить в прошлое");
+      return;
+    }
     if (t.scheduledOn === day) {
       // перенос в конец своего же дня — по полному списку дня
       const rest = tasksOn(tasks, day).filter((x) => x.id !== id);
@@ -118,6 +118,10 @@ export function DayColumn({
     if (idx === -1) return;
     const t = tasks.get(id);
     if (!t) return;
+    if (t.scheduledOn !== day && t.repeat && day < today) {
+      toast("Повторяющуюся задачу нельзя переносить в прошлое");
+      return;
+    }
     if (t.scheduledOn === day) {
       void patch(id, { dayPosition: idx });
     } else if (t.scheduledOn !== null && t.endOn !== null) {
@@ -167,7 +171,13 @@ export function DayColumn({
         )}
       </div>
       {spans.map((t) => (
-        <SpanCard key={`s${t.id}`} task={t} day={day} onOpen={onOpen} />
+        <TaskCard
+          key={`s${t.id}`}
+          task={t}
+          day={day}
+          variant="span"
+          onOpen={onOpen}
+        />
       ))}
       {list.map((t) => (
         <TaskCard
@@ -180,20 +190,7 @@ export function DayColumn({
         />
       ))}
       {ghosts.map((t) => (
-        <div
-          key={`g${t.id}`}
-          className="task-card ghost-card cursor-pointer"
-          style={{
-            borderLeft: `3px solid ${projects.get(t.projectId)?.color ?? "var(--check)"}`,
-          }}
-          title="Будущее вхождение повторяющейся задачи"
-          onClick={() => onOpen(t.id)}
-        >
-          <span className="text-dim flex-none flex items-center">
-            <RepeatIcon size={11} />
-          </span>
-          <span className="task-title flex-1 min-w-0 truncate">{t.title}</span>
-        </div>
+        <TaskCard key={`g${t.id}`} task={t} variant="ghost" onOpen={onOpen} />
       ))}
       {project ? (
         <div className="flex items-center gap-2 px-1 pt-1">
@@ -263,52 +260,6 @@ export function DayColumn({
           Сначала создай проект
         </p>
       )}
-    </div>
-  );
-}
-
-// «Продолжение» многодневной задачи: чекбокс + приглушённое название + «k/N».
-// Drag двигает весь диапазон (обрабатывает колонка-приёмник).
-function SpanCard({
-  task,
-  day,
-  onOpen,
-}: {
-  task: import("../data/types").Task;
-  day: string;
-  onOpen: (id: number) => void;
-}) {
-  const { patch } = useData();
-  const k = dayDiff(task.scheduledOn!, day) + 1;
-  const n = dayDiff(task.scheduledOn!, task.endOn!) + 1;
-  return (
-    <div
-      className="span-card cursor-pointer"
-      draggable
-      onClick={() => onOpen(task.id)}
-      onDragStart={(e) => {
-        setDragTask(e, task.id);
-        setDragGhost(e, e.currentTarget as HTMLElement);
-      }}
-    >
-      <Check
-        size="sm"
-        done={task.done}
-        label={task.done ? "Снять отметку" : "Отметить сделанной"}
-        onClick={(e) => {
-          e.stopPropagation();
-          void patch(task.id, { done: !task.done });
-        }}
-      />
-      <span
-        className={`flex-1 min-w-0 truncate text-left text-[12.5px] ${task.done ? "line-through" : ""}`}
-        title="Детали"
-      >
-        {task.title}
-      </span>
-      <span className="mmeta">
-        {k}/{n}
-      </span>
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { ConfirmButton } from "./ConfirmButton";
 import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker, DueDatePicker } from "./DatePicker";
 import { TypeBadge } from "./TypeBadge";
+import { TaskLinks } from "./TaskLinks";
 
 type PickerKind = "plan" | "due" | "type" | "assignee" | "repeat" | null;
 
@@ -32,11 +33,13 @@ export function TaskDetails({
   taskId,
   variant,
   showCrumb = false,
+  focusDescription,
   onClose,
 }: {
   taskId: number;
   variant: "panel" | "modal";
   showCrumb?: boolean;
+  focusDescription?: number;
   onClose: () => void;
 }) {
   const { tasks, projects, types, people, patch, remove } = useData();
@@ -105,6 +108,17 @@ export function TaskDetails({
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [taskId, task?.description]);
+
+  // после создания задачи родитель дёргает nonce — фокусируемся в описание
+  // (имя уже задано при создании), курсор в конец
+  useEffect(() => {
+    if (!focusDescription) return;
+    const el = descRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, [focusDescription]);
 
   if (!task) return null;
   const project = projects.get(task.projectId);
@@ -446,6 +460,8 @@ export function TaskDetails({
           </div>
         </AnchoredPopover>
       )}
+
+      <TaskLinks task={task} onClose={onClose} />
 
       <div>
         <MLabel className="pb-1">Описание</MLabel>

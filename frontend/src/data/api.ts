@@ -2,6 +2,8 @@ import type {
   CreateTaskReq,
   Note,
   NotePatch,
+  LinkType,
+  TaskLink,
   Person,
   Project,
   ProjectPatch,
@@ -107,7 +109,7 @@ export function createType(
 
 export function patchType(
   id: number,
-  patch: Partial<{ name: string; emoji: string }>,
+  patch: Partial<{ name: string; emoji: string; position: number }>,
 ): Promise<{ type: TaskType }> {
   return request(`/api/types/${id}`, {
     method: "PATCH",
@@ -145,6 +147,54 @@ export function patchNote(
 
 export function deleteNote(id: number): Promise<{ deleted: number }> {
   return request(`/api/notes/${id}`, { method: "DELETE" });
+}
+
+export function fetchLinkTypes(): Promise<{ linkTypes: LinkType[] }> {
+  return request("/api/link-types");
+}
+
+export function createLinkType(
+  name: string,
+  reverseName: string,
+  directed: boolean,
+): Promise<{ linkType: LinkType }> {
+  return request("/api/link-types", {
+    method: "POST",
+    body: JSON.stringify({ name, reverseName, directed }),
+  });
+}
+
+export function patchLinkType(
+  id: number,
+  patch: Partial<{ name: string; reverseName: string; directed: boolean; position: number }>,
+): Promise<{ linkType: LinkType }> {
+  return request(`/api/link-types/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteLinkType(id: number): Promise<{ ok: boolean }> {
+  return request(`/api/link-types/${id}`, { method: "DELETE" });
+}
+
+export function fetchTaskLinks(): Promise<{ taskLinks: TaskLink[] }> {
+  return request("/api/task-links");
+}
+
+export function createTaskLink(
+  fromId: number,
+  toId: number,
+  typeId: number,
+): Promise<{ taskLink: TaskLink }> {
+  return request("/api/task-links", {
+    method: "POST",
+    body: JSON.stringify({ fromId, toId, typeId }),
+  });
+}
+
+export function deleteTaskLink(id: number): Promise<{ ok: boolean }> {
+  return request(`/api/task-links/${id}`, { method: "DELETE" });
 }
 
 export function fetchPeople(): Promise<{ people: Person[] }> {

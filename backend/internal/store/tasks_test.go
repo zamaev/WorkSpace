@@ -670,6 +670,38 @@ func TestTypesAndPeople(t *testing.T) {
 	}
 }
 
+func TestTypeReorder(t *testing.T) {
+	e := openTest(t)
+	if _, err := CreateType(e.db, "A", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateType(e.db, "B", ""); err != nil {
+		t.Fatal(err)
+	}
+	c, err := CreateType(e.db, "C", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := func() string {
+		ts, _ := ListTypes(e.db)
+		s := ""
+		for _, x := range ts {
+			s += x.Name
+		}
+		return s
+	}
+	if names() != "ABC" {
+		t.Fatalf("исходный порядок по position: %s", names())
+	}
+	// перетащили C в начало
+	if _, err := UpdateType(e.db, c.ID, TypeUpdate{Position: new(0)}); err != nil {
+		t.Fatal(err)
+	}
+	if names() != "CAB" {
+		t.Errorf("после reorder C→0: %s (ждал CAB)", names())
+	}
+}
+
 func TestRolesAndMembers(t *testing.T) {
 	e := openTest(t)
 
@@ -874,6 +906,33 @@ func TestRepeatValidation(t *testing.T) {
 	}
 	if nc := e.get(t, c.ID); nc.Repeat != nil {
 		t.Errorf("повтор не снялся: %v", *nc.Repeat)
+	}
+}
+
+func TestRepeatNoPastMove(t *testing.T) {
+	e := openTest(t)
+	m, _, err := CreateTask(e.db, CreateReq{Title: "Планёрка", ProjectID: &e.pid, ScheduledOn: new("2030-01-07")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
+		t.Fatal(err)
+	}
+	// назад, в прошлое — нельзя
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2020-01-01")}); !errors.Is(err, ErrValidation) {
+		t.Errorf("перенос повтора в прошлое должен быть отклонён, got %v", err)
+	}
+	// вперёд — можно
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2031-02-02")}); err != nil {
+		t.Errorf("перенос повтора вперёд должен проходить: %v", err)
+	}
+	// обычная (без повтора) задача — в прошлое можно
+	p, _, err := CreateTask(e.db, CreateReq{Title: "разовая", ProjectID: &e.pid, ScheduledOn: new("2030-01-01")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTask(e.db, p.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2020-01-01")}); err != nil {
+		t.Errorf("обычную задачу в прошлое переносить можно: %v", err)
 	}
 }
 
