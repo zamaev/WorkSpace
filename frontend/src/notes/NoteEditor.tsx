@@ -6,6 +6,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import { TableKit } from "@tiptap/extension-table";
 import { useData } from "../data/DataProvider";
 import { noteAncestors } from "../data/selectors";
 import type { Note } from "../data/types";
@@ -59,6 +60,7 @@ export function NoteEditor({ note }: { note: Note }) {
       WikiLink.configure({
         getNotes: () => [...notesRef.current.values()],
       }),
+      TableKit.configure({ table: { resizable: false } }),
       Placeholder.configure({
         placeholder:
           "Пиши здесь… # заголовок, **жирный**, - список, > цитата, ```mermaid — диаграмма",
@@ -336,8 +338,27 @@ function Toolbar({ editor }: { editor: Editor }) {
         () => c().toggleCodeBlock().run(),
         "Блок кода",
       )}
+      {btn(
+        "⊞",
+        editor.isActive("table"),
+        () =>
+          c()
+            .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+            .run(),
+        "Вставить таблицу",
+      )}
       <span className="note-tool-sep" />
       {btn("🔗", editor.isActive("link"), () => promptLink(editor), "Ссылка ⌘K")}
+      {editor.isActive("table") && (
+        <>
+          <span className="note-tool-sep" />
+          {btn("стлб+", false, () => c().addColumnAfter().run(), "Столбец справа")}
+          {btn("стлб−", false, () => c().deleteColumn().run(), "Удалить столбец")}
+          {btn("стр+", false, () => c().addRowAfter().run(), "Строка ниже")}
+          {btn("стр−", false, () => c().deleteRow().run(), "Удалить строку")}
+          {btn("✕", false, () => c().deleteTable().run(), "Удалить таблицу")}
+        </>
+      )}
     </div>
   );
 }

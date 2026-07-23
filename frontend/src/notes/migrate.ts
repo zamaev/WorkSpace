@@ -3,6 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import { TableKit } from "@tiptap/extension-table";
 import { Markdown } from "tiptap-markdown";
 
 // Разовая миграция тела заметки markdown → HTML: заметки, созданные до
@@ -20,6 +21,7 @@ export function markdownToHtml(md: string): string {
       Link,
       TaskList,
       TaskItem.configure({ nested: true }),
+      TableKit,
       Markdown,
     ],
     content: md,

@@ -679,6 +679,33 @@
     font-size: 12.5px;
     color: var(--dim);
   }
+  /* таблицы */
+  .ProseMirror .tableWrapper {
+    overflow-x: auto;
+    margin: 0.6em 0;
+  }
+  .ProseMirror table {
+    border-collapse: collapse;
+    width: auto;
+  }
+  .ProseMirror table td,
+  .ProseMirror table th {
+    border: 1px solid var(--line);
+    padding: 5px 9px;
+    vertical-align: top;
+    text-align: left;
+    min-width: 60px;
+  }
+  .ProseMirror table th {
+    background: var(--asoft);
+    font-weight: 700;
+  }
+  .ProseMirror table p {
+    margin: 0;
+  }
+  .ProseMirror .selectedCell {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+  }
   /* панель форматирования WYSIWYG-редактора */
   .note-toolbar {
     display: flex;
