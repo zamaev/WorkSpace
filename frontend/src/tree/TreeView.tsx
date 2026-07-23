@@ -25,10 +25,12 @@ export function TreeView({
   project,
   selectedId,
   onSelect,
+  onCreateTask,
 }: {
   project: Project;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  onCreateTask: (id: number) => void;
 }) {
   const { tasks, people, members, setMembers, create } = useData();
   const [hideDone, setHideDone] = useState(
@@ -218,6 +220,7 @@ export function TreeView({
           flashId={flashId}
           selectedId={selectedId}
           onSelect={(id) => onSelect(id)}
+          onCreateTask={onCreateTask}
           hideDone={hideDone}
         />
       ))}
@@ -225,9 +228,10 @@ export function TreeView({
         depth={0}
         color={project.color}
         placeholder="Новая задача…"
-        onSubmit={async (title) =>
-          void (await create({ title, projectId: project.id }))
-        }
+        onSubmit={async (title) => {
+          const t = await create({ title, projectId: project.id });
+          if (t) onCreateTask(t.id);
+        }}
       />
     </div>
   );

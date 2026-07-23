@@ -9,6 +9,21 @@ export type Project = {
   position: number;
 };
 
+export type LinkType = {
+  id: number;
+  name: string;
+  reverseName: string;
+  directed: boolean;
+  position: number;
+};
+
+export type TaskLink = {
+  id: number;
+  fromId: number;
+  toId: number;
+  typeId: number;
+};
+
 export type TaskType = {
   id: number;
   name: string;

@@ -11,6 +11,7 @@ import type { Task } from "../data/types";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { dueChipClass, duePhase } from "../lib/due";
 import { getDragTask, hasDragTask, setDragGhost, setDragTask } from "./dnd";
+import { linkCount } from "../lib/links";
 
 type DropZone = "before" | "into" | "after" | null;
 
@@ -23,6 +24,7 @@ export function TreeNode({
   flashId,
   selectedId,
   onSelect,
+  onCreateTask,
   hideDone = false,
 }: {
   task: Task;
@@ -33,9 +35,10 @@ export function TreeNode({
   flashId: number | null;
   selectedId: number | null;
   onSelect: (id: number) => void;
+  onCreateTask: (id: number) => void;
   hideDone?: boolean;
 }) {
-  const { tasks, types, people, create, patch } = useData();
+  const { tasks, types, people, taskLinks, create, patch } = useData();
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dateMenu, setDateMenu] = useState(false);
@@ -52,6 +55,7 @@ export function TreeNode({
   const planEnd = task.endOn ?? task.scheduledOn;
   const chipOverdue = planEnd !== null && !task.done && planEnd < today;
   const due = duePhase(task.softDueOn, task.dueOn, today);
+  const links = linkCount(taskLinks, task.id);
 
   useEffect(() => {
     if (flashId === task.id) {
@@ -189,6 +193,15 @@ export function TreeNode({
         {task.typeId !== null && types.get(task.typeId) && (
           <TypeBadge type={types.get(task.typeId)!} />
         )}
+        {links > 0 && (
+          <span
+            className="mmeta flex-none"
+            title={`Связей: ${links}`}
+            aria-label={`Связей: ${links}`}
+          >
+            ↳{links}
+          </span>
+        )}
         {task.assigneeId !== null && people.get(task.assigneeId) && (
           <AvatarDot
             name={people.get(task.assigneeId)!.name}
@@ -281,6 +294,7 @@ export function TreeNode({
             flashId={flashId}
             selectedId={selectedId}
             onSelect={onSelect}
+            onCreateTask={onCreateTask}
             hideDone={hideDone}
           />
         ))}
@@ -290,7 +304,8 @@ export function TreeNode({
           depth={depth + 1}
           color={color}
           onSubmit={async (title) => {
-            await create({ title, parentId: task.id });
+            const t = await create({ title, parentId: task.id });
+            if (t) onCreateTask(t.id);
           }}
           onClose={() => setAdding(false)}
         />

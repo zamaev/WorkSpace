@@ -5,7 +5,7 @@ import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
 import { plural } from "../lib/plural";
 import { lastGrapheme } from "../lib/emoji";
-import type { TaskType } from "../data/types";
+import type { LinkType, TaskType } from "../data/types";
 
 const EMOJI_PRESETS = [
   "💻",
@@ -94,6 +94,138 @@ export function TypesView() {
         Клик по смайлику — выбор из набора или любой свой (панель эмодзи macOS:
         ⌃⌘Space). Имя — двойной клик.
       </p>
+
+      <LinkTypesPanel />
+    </div>
+  );
+}
+
+function LinkTypesPanel() {
+  const { linkTypes, createLinkType } = useData();
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const list = [...linkTypes.values()].sort(
+    (a, b) => a.position - b.position || a.id - b.id,
+  );
+  return (
+    <div className="panel px-4 py-3 mt-4">
+      <MLabel className="px-2 pb-2">Типы связей</MLabel>
+      {list.map((lt) => (
+        <LinkTypeRow key={lt.id} type={lt} />
+      ))}
+      <div className="prow prow-tight !border-b-0">
+        <span
+          className="w-[26px] text-center text-[15px] flex-none"
+          aria-hidden="true"
+        >
+          ＋
+        </span>
+        <input
+          className="ghost-input flex-1 text-[13.5px]"
+          name="new-link-type"
+          aria-label="Новый тип связи"
+          placeholder="Новый тип связи (по умолчанию — ненаправленный)…"
+          value={draft}
+          disabled={busy}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === "Escape") setDraft("");
+            if (e.key === "Enter" && draft.trim()) {
+              setBusy(true);
+              const lt = await createLinkType(draft.trim(), "", false);
+              setBusy(false);
+              if (lt) setDraft("");
+            }
+          }}
+        />
+      </div>
+      <p className="px-2 pt-2 text-[12px] text-dim m-0">
+        Направленная связь имеет прямую и обратную подпись (блокирует /
+        блокируется). Ненаправленная — одну (связана с). Имена — двойной клик.
+      </p>
+    </div>
+  );
+}
+
+function LinkTypeRow({ type }: { type: LinkType }) {
+  const { patchLinkType, removeLinkType } = useData();
+  const [renaming, setRenaming] = useState<"name" | "reverse" | null>(null);
+
+  const rename = (field: "name" | "reverse", value: string) => {
+    setRenaming(null);
+    const v = value.trim();
+    if (field === "name") {
+      if (v && v !== type.name) void patchLinkType(type.id, { name: v });
+    } else {
+      if (v !== type.reverseName)
+        void patchLinkType(type.id, { reverseName: v });
+    }
+  };
+
+  return (
+    <div className="prow">
+      <button
+        type="button"
+        className={`seg !px-2 !py-1 !text-[11px] flex-none ${type.directed ? "seg-on" : ""}`}
+        title={type.directed ? "Направленная" : "Ненаправленная"}
+        onClick={() => void patchLinkType(type.id, { directed: !type.directed })}
+      >
+        {type.directed ? "→" : "↔"}
+      </button>
+      {renaming === "name" ? (
+        <input
+          className="ghost-input flex-1 text-[13.5px]"
+          name="link-type-name"
+          aria-label="Прямая подпись"
+          defaultValue={type.name}
+          autoFocus
+          onBlur={(e) => rename("name", e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") rename("name", e.currentTarget.value);
+            if (e.key === "Escape") setRenaming(null);
+          }}
+        />
+      ) : (
+        <span
+          className="flex-1 min-w-0 truncate text-[13.5px]"
+          title="Двойной клик — переименовать"
+          onDoubleClick={() => setRenaming("name")}
+        >
+          {type.name}
+        </span>
+      )}
+      {type.directed &&
+        (renaming === "reverse" ? (
+          <input
+            className="ghost-input flex-1 text-[13.5px] text-dim"
+            name="link-type-reverse"
+            aria-label="Обратная подпись"
+            defaultValue={type.reverseName}
+            autoFocus
+            onBlur={(e) => rename("reverse", e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") rename("reverse", e.currentTarget.value);
+              if (e.key === "Escape") setRenaming(null);
+            }}
+          />
+        ) : (
+          <span
+            className="flex-1 min-w-0 truncate text-[12.5px] text-dim"
+            title="Обратная подпись — двойной клик"
+            onDoubleClick={() => setRenaming("reverse")}
+          >
+            {type.reverseName || "обратная подпись…"}
+          </span>
+        ))}
+      <ConfirmButton
+        className="row-btn row-btn-danger"
+        armedClassName="!bg-over/15 !text-over"
+        confirmLabel="✓"
+        title="Удалить тип связи (связи этого типа исчезнут)"
+        onConfirm={() => void removeLinkType(type.id)}
+      >
+        <TrashIcon />
+      </ConfirmButton>
     </div>
   );
 }

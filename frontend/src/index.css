@@ -520,6 +520,20 @@
     background: var(--asoft);
   }
 
+  /* связи задачи */
+  .link-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+  }
+  .link-row .row-btn {
+    opacity: 0;
+  }
+  .link-row:hover .row-btn {
+    opacity: 1;
+  }
+
   /* ── инспектор задачи ── */
 
   .inspector {
