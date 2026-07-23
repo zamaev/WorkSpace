@@ -12,6 +12,7 @@ import { noteAncestors } from "../data/selectors";
 import type { Note } from "../data/types";
 import { MermaidCodeBlock } from "./MermaidCodeBlock";
 import { WikiLink } from "./WikiLink";
+import { NoteTasks } from "./NoteTasks";
 
 type TocItem = { level: number; text: string; index: number };
 
@@ -175,6 +176,7 @@ export function NoteEditor({ note }: { note: Note }) {
           }
         }}
       />
+      <NoteTasks noteId={note.id} />
       {editor && <Toolbar editor={editor} />}
       <EditorContent
         editor={editor}

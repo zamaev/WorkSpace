@@ -637,6 +637,33 @@
     color: var(--line);
     margin-left: 4px;
   }
+  /* строка «Задачи» в заметке — чипы прикреплённых задач */
+  .note-tasks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0 10px;
+  }
+  .note-task-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 240px;
+    font-size: 12.5px;
+    padding: 2px 7px 2px 9px;
+    border-radius: 20px;
+    background: var(--asoft);
+    color: var(--accent);
+  }
+  .note-task-chip-x {
+    flex: none;
+    opacity: 0.55;
+    font-size: 11px;
+  }
+  .note-task-chip-x:hover {
+    opacity: 1;
+  }
   /* узкий экран: оглавление прячем, чтобы не сжимать текст */
   @media (max-width: 1080px) {
     .note-toc {

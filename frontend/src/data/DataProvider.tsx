@@ -16,6 +16,7 @@ import type {
   NotePatch,
   LinkType,
   TaskLink,
+  TaskNote,
   Person,
   Project,
   ProjectPatch,
@@ -35,6 +36,7 @@ type Store = {
   notes: Map<number, Note>;
   linkTypes: Map<number, LinkType>;
   taskLinks: TaskLink[];
+  taskNotes: TaskNote[];
   loading: boolean;
   offline: boolean;
   error: string | null;
@@ -78,6 +80,8 @@ type Store = {
   removeNote: (id: number) => Promise<void>;
   createLink: (fromId: number, toId: number, typeId: number) => Promise<void>;
   removeLink: (id: number) => Promise<void>;
+  createTaskNote: (taskId: number, noteId: number) => Promise<void>;
+  removeTaskNote: (id: number) => Promise<void>;
   createLinkType: (name: string, reverseName: string, directed: boolean) => Promise<LinkType | null>;
   patchLinkType: (id: number, p: Partial<{ name: string; reverseName: string; directed: boolean; position: number }>) => Promise<void>;
   removeLinkType: (id: number) => Promise<void>;
@@ -153,6 +157,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [notes, setNotes] = useState<Map<number, Note>>(new Map());
   const [linkTypes, setLinkTypes] = useState<Map<number, LinkType>>(new Map());
   const [taskLinks, setTaskLinks] = useState<TaskLink[]>([]);
+  const [taskNotes, setTaskNotes] = useState<TaskNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,6 +182,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         { notes: noteList },
         { linkTypes: linkTypeList },
         { taskLinks: taskLinkList },
+        { taskNotes: taskNoteList },
       ] = await Promise.all([
         api.fetchTasks(),
         api.fetchProjects(),
@@ -187,6 +193,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         api.fetchNotes(),
         api.fetchLinkTypes(),
         api.fetchTaskLinks(),
+        api.fetchTaskNotes(),
       ]);
       setTasks(new Map(taskList.map((t) => [t.id, stripTask(t)])));
       setProjects(new Map(projectList.map((p) => [p.id, stripProject(p)])));
@@ -201,6 +208,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setNotes(new Map((noteList ?? []).map((n) => [n.id, stripNote(n)])));
       setLinkTypes(new Map((linkTypeList ?? []).map((l) => [l.id, l])));
       setTaskLinks(taskLinkList ?? []);
+      setTaskNotes(taskNoteList ?? []);
       setOffline(false);
     } catch {
       setOffline(true);
@@ -649,6 +657,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [taskLinks, toast],
   );
 
+  const createTaskNote = useCallback(
+    async (taskId: number, noteId: number) => {
+      try {
+        const { taskNote } = await api.createTaskNote(taskId, noteId);
+        setTaskNotes((prev) => [...prev, taskNote]);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Не удалось прикрепить заметку");
+      }
+    },
+    [toast],
+  );
+
+  const removeTaskNote = useCallback(
+    async (id: number) => {
+      const snapshot = taskNotes;
+      setTaskNotes((prev) => prev.filter((l) => l.id !== id));
+      try {
+        await api.deleteTaskNote(id);
+      } catch (e) {
+        setTaskNotes(snapshot);
+        toast(e instanceof Error ? e.message : "Не удалось открепить заметку");
+      }
+    },
+    [taskNotes, toast],
+  );
+
   const createLinkType = useCallback(
     async (name: string, reverseName: string, directed: boolean): Promise<LinkType | null> => {
       try {
@@ -779,6 +813,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       taskLinks,
       createLink,
       removeLink,
+      taskNotes,
+      createTaskNote,
+      removeTaskNote,
       createLinkType,
       patchLinkType,
       removeLinkType,
@@ -819,6 +856,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       taskLinks,
       createLink,
       removeLink,
+      taskNotes,
+      createTaskNote,
+      removeTaskNote,
       createLinkType,
       patchLinkType,
       removeLinkType,

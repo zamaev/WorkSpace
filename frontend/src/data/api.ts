@@ -4,6 +4,7 @@ import type {
   NotePatch,
   LinkType,
   TaskLink,
+  TaskNote,
   Person,
   Project,
   ProjectPatch,
@@ -195,6 +196,24 @@ export function createTaskLink(
 
 export function deleteTaskLink(id: number): Promise<{ ok: boolean }> {
   return request(`/api/task-links/${id}`, { method: "DELETE" });
+}
+
+export function fetchTaskNotes(): Promise<{ taskNotes: TaskNote[] }> {
+  return request("/api/task-notes");
+}
+
+export function createTaskNote(
+  taskId: number,
+  noteId: number,
+): Promise<{ taskNote: TaskNote }> {
+  return request("/api/task-notes", {
+    method: "POST",
+    body: JSON.stringify({ taskId, noteId }),
+  });
+}
+
+export function deleteTaskNote(id: number): Promise<{ ok: boolean }> {
+  return request(`/api/task-notes/${id}`, { method: "DELETE" });
 }
 
 export function fetchPeople(): Promise<{ people: Person[] }> {

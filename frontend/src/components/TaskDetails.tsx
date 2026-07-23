@@ -23,6 +23,7 @@ import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker, DueDatePicker } from "./DatePicker";
 import { TypeBadge } from "./TypeBadge";
 import { TaskLinks } from "./TaskLinks";
+import { TaskNotes } from "./TaskNotes";
 
 type PickerKind = "plan" | "due" | "type" | "assignee" | "repeat" | null;
 
@@ -462,6 +463,8 @@ export function TaskDetails({
       )}
 
       <TaskLinks task={task} onClose={onClose} />
+
+      <TaskNotes task={task} onClose={onClose} />
 
       <div>
         <MLabel className="pb-1">Описание</MLabel>

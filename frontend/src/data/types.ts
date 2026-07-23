@@ -39,6 +39,12 @@ export type TaskLink = {
   typeId: number;
 };
 
+export type TaskNote = {
+  id: number;
+  taskId: number;
+  noteId: number;
+};
+
 export type TaskType = {
   id: number;
   name: string;
