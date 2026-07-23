@@ -694,6 +694,49 @@ func Handler(db *sql.DB) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
 
+	// ── привязка заметок к задачам ──
+
+	mux.HandleFunc("GET /api/task-notes", func(w http.ResponseWriter, r *http.Request) {
+		links, err := store.ListTaskNotes(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if links == nil {
+			links = []store.TaskNote{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"taskNotes": links})
+	})
+
+	mux.HandleFunc("POST /api/task-notes", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			TaskID int64 `json:"taskId"`
+			NoteID int64 `json:"noteId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		tn, err := store.CreateTaskNote(db, b.TaskID, b.NoteID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"taskNote": tn})
+	})
+
+	mux.HandleFunc("DELETE /api/task-notes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteTaskNote(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
 	// ── задачи ──
 
 	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -829,7 +872,7 @@ func writeErr(w http.ResponseWriter, err error) {
 		errors.Is(err, store.ErrProjectNotEmpty), errors.Is(err, store.ErrArchivedTarget),
 		errors.Is(err, store.ErrBadType), errors.Is(err, store.ErrBadPerson),
 		errors.Is(err, store.ErrBadLinkType), errors.Is(err, store.ErrSelfLink),
-		errors.Is(err, store.ErrDupLink):
+		errors.Is(err, store.ErrDupLink), errors.Is(err, store.ErrDupTaskNote):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 	default:
 		slog.Error("внутренняя ошибка api", "err", err)
