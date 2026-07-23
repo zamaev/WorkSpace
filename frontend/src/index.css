@@ -739,6 +739,70 @@
     padding: 0;
     font-size: 0.86em;
   }
+  /* подсветка синтаксиса (highlight.js токены); тёмная тема — по умолчанию */
+  .ProseMirror pre .hljs-comment,
+  .ProseMirror pre .hljs-quote {
+    color: #6b7178;
+    font-style: italic;
+  }
+  .ProseMirror pre .hljs-keyword,
+  .ProseMirror pre .hljs-built_in,
+  .ProseMirror pre .hljs-literal {
+    color: #c678dd;
+  }
+  .ProseMirror pre .hljs-string,
+  .ProseMirror pre .hljs-regexp,
+  .ProseMirror pre .hljs-meta .hljs-string {
+    color: #98c379;
+  }
+  .ProseMirror pre .hljs-number {
+    color: #d19a66;
+  }
+  .ProseMirror pre .hljs-title,
+  .ProseMirror pre .hljs-title.function_ {
+    color: #61afef;
+  }
+  .ProseMirror pre .hljs-attr,
+  .ProseMirror pre .hljs-attribute,
+  .ProseMirror pre .hljs-property {
+    color: #e5c07b;
+  }
+  .ProseMirror pre .hljs-type,
+  .ProseMirror pre .hljs-symbol,
+  .ProseMirror pre .hljs-meta {
+    color: #56b6c2;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-comment,
+  [data-theme="light"] .ProseMirror pre .hljs-quote {
+    color: #a0a1a7;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-keyword,
+  [data-theme="light"] .ProseMirror pre .hljs-built_in,
+  [data-theme="light"] .ProseMirror pre .hljs-literal {
+    color: #a626a4;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-string,
+  [data-theme="light"] .ProseMirror pre .hljs-regexp,
+  [data-theme="light"] .ProseMirror pre .hljs-meta .hljs-string {
+    color: #50a14f;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-number {
+    color: #986801;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-title,
+  [data-theme="light"] .ProseMirror pre .hljs-title.function_ {
+    color: #4078f2;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-attr,
+  [data-theme="light"] .ProseMirror pre .hljs-attribute,
+  [data-theme="light"] .ProseMirror pre .hljs-property {
+    color: #c18401;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-type,
+  [data-theme="light"] .ProseMirror pre .hljs-symbol,
+  [data-theme="light"] .ProseMirror pre .hljs-meta {
+    color: #0184bc;
+  }
   .ProseMirror a {
     color: var(--accent);
     text-decoration: underline;

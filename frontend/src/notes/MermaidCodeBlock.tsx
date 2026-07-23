@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import CodeBlock from "@tiptap/extension-code-block";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { createLowlight } from "lowlight";
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import go from "highlight.js/lib/languages/go";
+import python from "highlight.js/lib/languages/python";
+import sql from "highlight.js/lib/languages/sql";
+import bash from "highlight.js/lib/languages/bash";
+import json from "highlight.js/lib/languages/json";
 import {
   NodeViewContent,
   NodeViewWrapper,
   ReactNodeViewRenderer,
   type NodeViewProps,
 } from "@tiptap/react";
+
+// курированный набор языков — вес бандла под контролем; "mermaid" не
+// подсвечивается (рендерится диаграммой в node view)
+const lowlight = createLowlight();
+lowlight.register({ javascript, typescript, go, python, sql, bash, json });
 
 // Языки для селектора у блока кода. "mermaid" рендерит диаграмму.
 const LANGS: { value: string; label: string }[] = [
@@ -26,11 +39,11 @@ let renderSeq = 0;
 // языке "mermaid" под кодом — живая диаграмма (перерисовывается при
 // правке, с debounce). Сам mermaid грузится лениво, чтобы не утяжелять
 // основной бандл заметками без диаграмм.
-export const MermaidCodeBlock = CodeBlock.extend({
+export const MermaidCodeBlock = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockView);
   },
-});
+}).configure({ lowlight });
 
 function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
   const language = (node.attrs.language as string | null) ?? "";
