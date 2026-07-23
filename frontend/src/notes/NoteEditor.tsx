@@ -73,6 +73,7 @@ export function NoteEditor({ note }: { note: Note }) {
 
   return (
     <div className="notes-editor panel px-6 py-5">
+      <div className="note-doc">
       <input
         className="ghost-input text-[22px] font-semibold pb-2"
         name="note-title-main"
@@ -118,6 +119,7 @@ export function NoteEditor({ note }: { note: Note }) {
           }
         }}
       />
+      </div>
     </div>
   );
 }
@@ -196,6 +198,12 @@ function Toolbar({ editor }: { editor: Editor }) {
         editor.isActive("heading", { level: 2 }),
         () => c().toggleHeading({ level: 2 }).run(),
         "Заголовок 2",
+      )}
+      {btn(
+        "H3",
+        editor.isActive("heading", { level: 3 }),
+        () => c().toggleHeading({ level: 3 }).run(),
+        "Заголовок 3",
       )}
       <span className="note-tool-sep" />
       {btn(

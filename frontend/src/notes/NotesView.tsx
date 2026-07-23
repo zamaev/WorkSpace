@@ -231,7 +231,11 @@ function NoteNode({
               e.stopPropagation();
               setRenaming(true);
             }}
-            title="Двойной клик — переименовать"
+            title={
+              note.title.trim() === ""
+                ? "Без названия — двойной клик для переименования"
+                : note.title
+            }
           >
             {note.title.trim() === "" ? "Без названия" : note.title}
           </span>
