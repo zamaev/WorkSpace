@@ -293,7 +293,7 @@ function NoteNode({
     <div>
       <div
         className={`tree-row ${isSel ? "tree-row-sel" : ""} ${zoneCls}`}
-        style={{ marginLeft: depth * 16 }}
+        style={{ marginLeft: depth * 14 }}
         draggable={!renaming}
         onClick={() => navigate(`/notes/${note.id}`)}
         onDragStart={(e) => {

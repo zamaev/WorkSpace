@@ -524,7 +524,7 @@
 
   .notes-layout {
     display: flex;
-    gap: 16px;
+    gap: 8px;
     align-items: flex-start;
   }
   .notes-side {
@@ -535,8 +535,22 @@
     max-height: calc(100vh - 100px);
     overflow-y: auto;
   }
+  /* дерево заметок плотнее общего .tree-row (десктоп-раздел, тач-таргеты
+     тут не критичны) — компактный список в духе Outline/Notion */
+  .notes-side .tree-row {
+    min-height: 26px;
+    padding: 1px 6px;
+    gap: 5px;
+    border-radius: 7px;
+  }
+  .notes-side .chevron {
+    width: 16px;
+    height: 16px;
+  }
+  /* белая панель редактора обнимает текст (не растягивается на всю ширину),
+     справа остаётся серое поле под оглавление */
   .notes-editor {
-    flex: 1;
+    flex: 0 1 812px;
     min-width: 0;
     min-height: calc(100vh - 120px);
   }
@@ -565,15 +579,13 @@
   .note-doc {
     max-width: 760px;
   }
-  /* редактор с колонкой оглавления справа */
+  /* внешний ряд: белая панель + оглавление в сером поле; сам ряд без фона */
   .note-editor-wide {
-    display: flex;
-    gap: 28px;
-    align-items: flex-start;
-  }
-  .note-editor-wide .note-doc {
     flex: 1;
     min-width: 0;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
   }
   .note-toc {
     flex: none;
@@ -802,12 +814,16 @@
   }
   .ProseMirror ul[data-type="taskList"] li > label {
     flex: none;
-    margin-top: 0.3em;
+    margin-top: 3px;
     user-select: none;
   }
   .ProseMirror ul[data-type="taskList"] li > div {
     flex: 1;
     min-width: 0;
+  }
+  /* без вертикального margin у абзаца — иначе текст съезжает от чекбокса */
+  .ProseMirror ul[data-type="taskList"] li > div > p {
+    margin: 0;
   }
   .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
     color: var(--dim);

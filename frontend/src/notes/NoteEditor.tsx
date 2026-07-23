@@ -135,7 +135,8 @@ export function NoteEditor({ note }: { note: Note }) {
   };
 
   return (
-    <div className="notes-editor note-editor-wide panel px-6 py-5">
+    <div className="note-editor-wide">
+      <div className="notes-editor panel px-6 py-5">
       <div className="note-doc">
       {path.length > 0 && (
         <nav className="note-crumbs" aria-label="Путь">
@@ -204,6 +205,7 @@ export function NoteEditor({ note }: { note: Note }) {
           }
         }}
       />
+      </div>
       </div>
       {toc.length > 1 && (
         <nav className="note-toc" aria-label="Оглавление">
