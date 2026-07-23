@@ -5,7 +5,6 @@ export const TWO_WEEKS_KEY = "workspace-two-weeks";
 export const FILTER_ASSIGNEE_KEY = "workspace-filter-assignee";
 export const FILTER_TYPE_KEY = "workspace-filter-type";
 export const HIDE_DONE_KEY = "workspace-hide-done";
-export const SELECTED_TASK_KEY = "workspace-selected-task";
 
 export function readPref(key: string): string | null {
   try {

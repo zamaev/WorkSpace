@@ -7,13 +7,7 @@ import { MLabel } from "./ui";
 
 // Секция «Заметки» в инспекторе задачи: прикреплённые заметки + пикер
 // «＋ прикрепить» (поиск заметки по названию). Клик по заметке ведёт в неё.
-export function TaskNotes({
-  task,
-  onClose,
-}: {
-  task: Task;
-  onClose: () => void;
-}) {
+export function TaskNotes({ task }: { task: Task }) {
   const { notes, taskNotes, createTaskNote, removeTaskNote } = useData();
   const navigate = useNavigate();
   const addRef = useRef<HTMLButtonElement>(null);
@@ -21,8 +15,9 @@ export function TaskNotes({
 
   const linked = taskNotes.filter((tn) => tn.taskId === task.id);
 
+  // уходим в заметку не закрывая инспектор: ?task остаётся в записи истории,
+  // поэтому «назад» из заметки вернёт открытую задачу
   const goTo = (noteId: number) => {
-    onClose();
     navigate(`/notes/${noteId}`);
   };
 

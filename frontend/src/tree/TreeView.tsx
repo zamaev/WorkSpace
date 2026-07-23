@@ -65,11 +65,15 @@ export function TreeView({
     });
   }, []);
 
-  // переход «в дереве →» из недели: раскрыть путь, подсветить, проскроллить
+  // переход к задаче из ссылок/палитры/заметки: раскрыть путь, подсветить,
+  // проскроллить. Сам выбор задачи делает ?task (его читает ProjectsView) —
+  // здесь только транзитная подсветка ?focus, снимаем её через 2.2с. Зависим
+  // от строкового значения focus, а не от объекта params: иначе setParams
+  // ниже перезапустит эффект и будет бесконечно сбрасывать таймер.
+  const focusParam = params.get("focus");
   useEffect(() => {
-    const focus = params.get("focus");
-    if (!focus) return;
-    const id = Number(focus);
+    if (!focusParam) return;
+    const id = Number(focusParam);
     if (!tasks.has(id)) return;
     setClosed((prev) => {
       const next = new Set(prev);
@@ -81,13 +85,20 @@ export function TreeView({
       return next;
     });
     setFlashId(id);
-    onSelect(id);
     const timer = setTimeout(() => {
       setFlashId(null);
-      setParams({}, { replace: true });
+      // снимаем только транзитный focus — выбор задачи (?task) остаётся в URL
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("focus");
+          return next;
+        },
+        { replace: true },
+      );
     }, 2200);
     return () => clearTimeout(timer);
-  }, [params, tasks, setParams, onSelect]);
+  }, [focusParam, tasks, setParams]);
 
   const roots = rootTasks(tasks, project.id).filter(
     (t) => !hideDone || !t.done,

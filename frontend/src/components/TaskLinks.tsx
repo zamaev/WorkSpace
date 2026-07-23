@@ -8,14 +8,8 @@ import { MLabel } from "./ui";
 
 // Секция «Связи» в инспекторе задачи: списки связей по подписям + пикер
 // «＋ связать» (поиск задачи → выбор типа/направления). Клик по связанной
-// задаче ведёт в неё (через ?focus= в дереве).
-export function TaskLinks({
-  task,
-  onClose,
-}: {
-  task: Task;
-  onClose: () => void;
-}) {
+// задаче открывает её в инспекторе (?task) и подсвечивает в дереве (?focus).
+export function TaskLinks({ task }: { task: Task }) {
   const { tasks, linkTypes, taskLinks, createLink, removeLink } = useData();
   const navigate = useNavigate();
   const addRef = useRef<HTMLButtonElement>(null);
@@ -26,8 +20,7 @@ export function TaskLinks({
   const goTo = (id: number) => {
     const t = tasks.get(id);
     if (!t) return;
-    onClose();
-    navigate(`/projects/${t.projectId}?focus=${id}`);
+    navigate(`/projects/${t.projectId}?task=${id}&focus=${id}`);
   };
 
   return (

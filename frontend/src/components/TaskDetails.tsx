@@ -462,9 +462,9 @@ export function TaskDetails({
         </AnchoredPopover>
       )}
 
-      <TaskLinks task={task} onClose={onClose} />
+      <TaskLinks task={task} />
 
-      <TaskNotes task={task} onClose={onClose} />
+      <TaskNotes task={task} />
 
       <div>
         <MLabel className="pb-1">Описание</MLabel>
@@ -513,9 +513,8 @@ export function TaskDetails({
             <TrashIcon /> Удалить
           </ConfirmButton>
           <Link
-            to={`/projects/${task.projectId}?focus=${task.id}`}
+            to={`/projects/${task.projectId}?task=${task.id}&focus=${task.id}`}
             className="mmeta !text-accent"
-            onClick={onClose}
           >
             в дереве →
           </Link>
