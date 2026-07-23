@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -6,8 +7,11 @@ import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { useData } from "../data/DataProvider";
+import { noteAncestors } from "../data/selectors";
 import type { Note } from "../data/types";
 import { MermaidCodeBlock } from "./MermaidCodeBlock";
+
+type TocItem = { level: number; text: string; index: number };
 
 // WYSIWYG-редактор заметки в духе Outline: пишешь и сразу видишь. Тело
 // хранится как HTML — родной формат редактора: пустые абзацы и любое
@@ -17,8 +21,11 @@ import { MermaidCodeBlock } from "./MermaidCodeBlock";
 // подсказки на лету (# , **, - , > ), вставка URL поверх выделения →
 // ссылка — из коробки StarterKit + Link.
 export function NoteEditor({ note }: { note: Note }) {
-  const { patchNote } = useData();
+  const { patchNote, notes } = useData();
+  const navigate = useNavigate();
   const [title, setTitle] = useState(note.title);
+  const path = noteAncestors(notes, note.id);
+  const [toc, setToc] = useState<TocItem[]>([]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<(() => void) | null>(null);
@@ -71,13 +78,68 @@ export function NoteEditor({ note }: { note: Note }) {
   // отложенное сохранение, чтобы не потерять последние символы
   useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // оглавление из заголовков тела; пересчитывается при правках. Доступ к
+  // view.dom в tiptap v3 бросает до монтирования — ждём событие create и
+  // страхуемся try/catch
+  useEffect(() => {
+    if (!editor) return;
+    const compute = () => {
+      if (editor.isDestroyed) return;
+      let dom: HTMLElement;
+      try {
+        dom = editor.view.dom as HTMLElement;
+      } catch {
+        return; // view ещё не смонтирован
+      }
+      const hs = [...dom.querySelectorAll("h1, h2, h3")].map(
+        (h, i): TocItem => ({
+          level: Number(h.tagName[1]),
+          text: h.textContent ?? "",
+          index: i,
+        }),
+      );
+      setToc(hs);
+    };
+    editor.on("create", compute);
+    editor.on("update", compute);
+    compute();
+    return () => {
+      editor.off("create", compute);
+      editor.off("update", compute);
+    };
+  }, [editor]);
+
+  const scrollToHeading = (index: number) => {
+    if (!editor) return;
+    try {
+      const els = editor.view.dom.querySelectorAll("h1, h2, h3");
+      els[index]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      // view недоступен — молча пропускаем
+    }
+  };
+
   const saveTitle = (v: string) => {
     if (v !== note.title) void patchNote(note.id, { title: v });
   };
 
   return (
-    <div className="notes-editor panel px-6 py-5">
+    <div className="notes-editor note-editor-wide panel px-6 py-5">
       <div className="note-doc">
+      {path.length > 0 && (
+        <nav className="note-crumbs" aria-label="Путь">
+          {path.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="note-crumb"
+              onClick={() => navigate(`/notes/${p.id}`)}
+            >
+              {p.title.trim() === "" ? "Без названия" : p.title}
+            </button>
+          ))}
+        </nav>
+      )}
       <input
         className="ghost-input text-[22px] font-semibold pb-2"
         name="note-title-main"
@@ -124,6 +186,23 @@ export function NoteEditor({ note }: { note: Note }) {
         }}
       />
       </div>
+      {toc.length > 1 && (
+        <nav className="note-toc" aria-label="Оглавление">
+          <div className="mlabel pb-1.5">Оглавление</div>
+          {toc.map((h) => (
+            <button
+              key={h.index}
+              type="button"
+              className="note-toc-item"
+              style={{ paddingLeft: (h.level - 1) * 10 }}
+              onClick={() => scrollToHeading(h.index)}
+              title={h.text}
+            >
+              {h.text}
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }

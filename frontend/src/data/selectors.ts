@@ -26,6 +26,21 @@ export function noteSubtreeIds(notes: Map<number, Note>, id: number): number[] {
   return out;
 }
 
+// Предки заметки от корня к родителю (без самой заметки) — хлебные крошки.
+export function noteAncestors(notes: Map<number, Note>, id: number): Note[] {
+  const out: Note[] = [];
+  const seen = new Set<number>();
+  let cur = notes.get(id)?.parentId ?? null;
+  while (cur !== null && !seen.has(cur)) {
+    seen.add(cur);
+    const p = notes.get(cur);
+    if (!p) break;
+    out.unshift(p);
+    cur = p.parentId;
+  }
+  return out;
+}
+
 // Чистые выборки из Map задач. Дерево и день собираются на клиенте —
 // сервер отдаёт плоский список.
 
