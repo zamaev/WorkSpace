@@ -25,7 +25,7 @@ export function DayColumn({
   onOpen: (id: number) => void;
   matches: (t: import("../data/types").Task) => boolean;
 }) {
-  const { tasks, projects, create, patch } = useData();
+  const { tasks, projects, create, patch, toast } = useData();
   const [colDrop, setColDrop] = useState(false);
   const [dropBeforeId, setDropBeforeId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -84,6 +84,11 @@ export function DayColumn({
     if (id === null) return;
     const t = tasks.get(id);
     if (!t) return;
+    // повторяющуюся серию нельзя переносить в прошлое (только смена дня)
+    if (t.scheduledOn !== day && t.repeat && day < today) {
+      toast("Повторяющуюся задачу нельзя переносить в прошлое");
+      return;
+    }
     if (t.scheduledOn === day) {
       // перенос в конец своего же дня — по полному списку дня
       const rest = tasksOn(tasks, day).filter((x) => x.id !== id);
@@ -113,6 +118,10 @@ export function DayColumn({
     if (idx === -1) return;
     const t = tasks.get(id);
     if (!t) return;
+    if (t.scheduledOn !== day && t.repeat && day < today) {
+      toast("Повторяющуюся задачу нельзя переносить в прошлое");
+      return;
+    }
     if (t.scheduledOn === day) {
       void patch(id, { dayPosition: idx });
     } else if (t.scheduledOn !== null && t.endOn !== null) {

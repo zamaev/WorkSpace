@@ -75,6 +75,7 @@ type Store = {
   createLinkType: (name: string, reverseName: string, directed: boolean) => Promise<LinkType | null>;
   patchLinkType: (id: number, p: Partial<{ name: string; reverseName: string; directed: boolean; position: number }>) => Promise<void>;
   removeLinkType: (id: number) => Promise<void>;
+  toast: (msg: string) => void;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -694,6 +695,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createLinkType,
       patchLinkType,
       removeLinkType,
+      toast,
     }),
     [
       tasks,
@@ -729,6 +731,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createLinkType,
       patchLinkType,
       removeLinkType,
+      toast,
     ],
   );
 

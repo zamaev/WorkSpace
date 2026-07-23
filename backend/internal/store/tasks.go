@@ -366,6 +366,13 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		return nil, err
 	}
 
+	// повторяющуюся серию нельзя переносить в прошлое: носитель — это
+	// ближайшее вхождение, двигать его можно только на сегодня или вперёд
+	// (разовый перенос встречи), иначе прошлые дни серии рассыпаются
+	if r.SetScheduledOn && r.ScheduledOn != nil && cur.Repeat != nil && *r.ScheduledOn < todayISO() {
+		return nil, fmt.Errorf("%w: повторяющуюся задачу нельзя переносить в прошлое", ErrValidation)
+	}
+
 	affected := map[int64]bool{id: true}
 
 	// повтор: done-переход или разовый перенос спавнят следующее
