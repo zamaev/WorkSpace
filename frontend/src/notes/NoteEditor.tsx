@@ -3,6 +3,8 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
 import { useData } from "../data/DataProvider";
 import type { Note } from "../data/types";
 import { MermaidCodeBlock } from "./MermaidCodeBlock";
@@ -39,6 +41,8 @@ export function NoteEditor({ note }: { note: Note }) {
     extensions: [
       StarterKit.configure({ link: false, codeBlock: false }),
       MermaidCodeBlock,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       Placeholder.configure({
         placeholder:
           "Пиши здесь… # заголовок, **жирный**, - список, > цитата, ```mermaid — диаграмма",
@@ -217,6 +221,12 @@ function Toolbar({ editor }: { editor: Editor }) {
         editor.isActive("orderedList"),
         () => c().toggleOrderedList().run(),
         "Нумерованный список",
+      )}
+      {btn(
+        "☑",
+        editor.isActive("taskList"),
+        () => c().toggleTaskList().run(),
+        "Чек-лист",
       )}
       {btn(
         "❝",

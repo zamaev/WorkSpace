@@ -1,6 +1,8 @@
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "tiptap-markdown";
 
 // Разовая миграция тела заметки markdown → HTML: заметки, созданные до
@@ -13,7 +15,13 @@ export function looksLikeHtml(body: string): boolean {
 
 export function markdownToHtml(md: string): string {
   const editor = new Editor({
-    extensions: [StarterKit.configure({ link: false }), Link, Markdown],
+    extensions: [
+      StarterKit.configure({ link: false }),
+      Link,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Markdown,
+    ],
     content: md,
   });
   const html = editor.getHTML();
