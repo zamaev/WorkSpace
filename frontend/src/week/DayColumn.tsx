@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check, RepeatIcon, SDot } from "../components/ui";
+import { Check, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import {
   flattenActiveProjects,
@@ -180,20 +180,7 @@ export function DayColumn({
         />
       ))}
       {ghosts.map((t) => (
-        <div
-          key={`g${t.id}`}
-          className="task-card ghost-card cursor-pointer"
-          style={{
-            borderLeft: `3px solid ${projects.get(t.projectId)?.color ?? "var(--check)"}`,
-          }}
-          title="Будущее вхождение повторяющейся задачи"
-          onClick={() => onOpen(t.id)}
-        >
-          <span className="text-dim flex-none flex items-center">
-            <RepeatIcon size={11} />
-          </span>
-          <span className="task-title flex-1 min-w-0 truncate">{t.title}</span>
-        </div>
+        <TaskCard key={`g${t.id}`} task={t} ghost onOpen={onOpen} />
       ))}
       {project ? (
         <div className="flex items-center gap-2 px-1 pt-1">

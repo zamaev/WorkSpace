@@ -45,7 +45,8 @@ export function TypesView() {
   );
 
   return (
-    <div className="max-w-[560px]">
+    <div className="grid gap-4 md:grid-cols-2 items-start max-w-[940px]">
+      <div>
       <div className="panel px-4 py-3">
         <MLabel className="px-2 pb-2">Типы задач</MLabel>
         {list.length === 0 && (
@@ -94,6 +95,7 @@ export function TypesView() {
         Клик по смайлику — выбор из набора или любой свой (панель эмодзи macOS:
         ⌃⌘Space). Имя — двойной клик.
       </p>
+      </div>
 
       <LinkTypesPanel />
     </div>
@@ -108,7 +110,7 @@ function LinkTypesPanel() {
     (a, b) => a.position - b.position || a.id - b.id,
   );
   return (
-    <div className="panel px-4 py-3 mt-4">
+    <div className="panel px-4 py-3">
       <MLabel className="px-2 pb-2">Типы связей</MLabel>
       {list.map((lt) => (
         <LinkTypeRow key={lt.id} type={lt} />
