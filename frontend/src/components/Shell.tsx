@@ -37,9 +37,9 @@ export function Shell({ children }: { children: ReactNode }) {
       if (e.key === "1") navigate("/projects");
       if (e.key === "2") navigate("/week");
       if (e.key === "3") navigate("/gantt");
-      if (e.key === "4") navigate("/team");
-      if (e.key === "5") navigate("/types");
-      if (e.key === "6") navigate("/notes");
+      if (e.key === "4") navigate("/notes");
+      if (e.key === "5") navigate("/team");
+      if (e.key === "6") navigate("/types");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -78,25 +78,25 @@ export function Shell({ children }: { children: ReactNode }) {
             Гант
           </NavLink>
           <NavLink
+            to="/notes"
+            title="Заметки — клавиша 4"
+            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
+          >
+            Заметки
+          </NavLink>
+          <NavLink
             to="/team"
-            title="Команда — клавиша 4"
+            title="Команда — клавиша 5"
             className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
           >
             Команда
           </NavLink>
           <NavLink
             to="/types"
-            title="Типы — клавиша 5"
+            title="Типы — клавиша 6"
             className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
           >
             Типы
-          </NavLink>
-          <NavLink
-            to="/notes"
-            title="Заметки — клавиша 6"
-            className={({ isActive }) => `seg ${isActive ? "seg-on" : ""}`}
-          >
-            Заметки
           </NavLink>
         </nav>
         <div className="flex gap-2">
@@ -129,7 +129,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <div className="flex flex-col gap-1">
                 <span>
                   <span className="mmeta">1–6</span> — Проекты · Неделя · Гант ·
-                  Команда · Типы · Заметки
+                  Заметки · Команда · Типы
                 </span>
                 <span>
                   <span className="mmeta">⌘K</span> — поиск задач и проектов
