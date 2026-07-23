@@ -694,7 +694,7 @@
   /* таблицы */
   .ProseMirror .tableWrapper {
     overflow-x: auto;
-    margin: 0.6em 0;
+    margin: 0.5em 0;
   }
   .ProseMirror table {
     border-collapse: collapse;
@@ -759,7 +759,7 @@
     outline: none;
     min-height: 55vh;
     font-size: 14.5px;
-    line-height: 1.7;
+    line-height: 1.6;
     color: var(--text);
   }
   .ProseMirror p.is-editor-empty:first-child::before {
@@ -773,25 +773,25 @@
   .ProseMirror h1 {
     font-size: 22px;
     font-weight: 700;
-    margin: 0.6em 0 0.3em;
+    margin: 0.7em 0 0.2em;
   }
   .ProseMirror h2 {
     font-size: 18px;
     font-weight: 700;
-    margin: 0.6em 0 0.3em;
+    margin: 0.7em 0 0.2em;
   }
   .ProseMirror h3 {
     font-size: 15px;
     font-weight: 700;
-    margin: 0.6em 0 0.3em;
+    margin: 0.7em 0 0.2em;
   }
   .ProseMirror p {
-    margin: 0.45em 0;
+    margin: 0.3em 0;
   }
   .ProseMirror ul,
   .ProseMirror ol {
-    margin: 0.45em 0;
-    padding-left: 1.5em;
+    margin: 0.35em 0;
+    padding-left: 1.4em;
   }
   .ProseMirror ul {
     list-style: disc;
@@ -800,6 +800,16 @@
     list-style: decimal;
   }
   .ProseMirror li {
+    margin: 0.1em 0;
+  }
+  /* содержимое пункта — абзац без вертикального margin, иначе элементы
+     списка разъезжаются как несвязанные */
+  .ProseMirror li > p {
+    margin: 0;
+  }
+  /* вложенные списки плотнее */
+  .ProseMirror li > ul,
+  .ProseMirror li > ol {
     margin: 0.1em 0;
   }
   /* чек-лист: чекбокс + текст в строку, без маркера; сделанные — приглушены */
@@ -830,7 +840,7 @@
     text-decoration: line-through;
   }
   .ProseMirror blockquote {
-    margin: 0.6em 0;
+    margin: 0.5em 0;
     padding: 0.2em 0 0.2em 0.9em;
     border-left: 3px solid var(--accent);
     color: var(--dim);
@@ -848,11 +858,11 @@
     border-radius: 10px;
     padding: 12px 14px;
     overflow-x: auto;
-    margin: 0.6em 0;
+    margin: 0.5em 0;
   }
   /* блок кода с NodeView: шапка-селектор языка + (для mermaid) диаграмма */
   .ProseMirror .code-block {
-    margin: 0.6em 0;
+    margin: 0.5em 0;
   }
   .code-block-head {
     display: flex;
