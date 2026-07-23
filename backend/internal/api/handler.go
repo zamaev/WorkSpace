@@ -51,6 +51,55 @@ type projectJSON struct {
 	UpdatedAt string  `json:"updatedAt"`
 }
 
+type linkTypeJSON struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	ReverseName string `json:"reverseName"`
+	Directed    bool   `json:"directed"`
+	Position    int    `json:"position"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func toLinkTypeJSON(l store.LinkType) linkTypeJSON {
+	return linkTypeJSON(l)
+}
+
+func toLinkTypeList(ls []store.LinkType) []linkTypeJSON {
+	out := make([]linkTypeJSON, len(ls))
+	for i, l := range ls {
+		out[i] = toLinkTypeJSON(l)
+	}
+	return out
+}
+
+type linkTypeBody struct {
+	Name        Opt[string] `json:"name"`
+	ReverseName Opt[string] `json:"reverseName"`
+	Directed    Opt[bool]   `json:"directed"`
+	Position    Opt[int]    `json:"position"`
+}
+
+type taskLinkJSON struct {
+	ID        int64  `json:"id"`
+	FromID    int64  `json:"fromId"`
+	ToID      int64  `json:"toId"`
+	TypeID    int64  `json:"typeId"`
+	CreatedAt string `json:"createdAt"`
+}
+
+func toTaskLinkJSON(l store.TaskLink) taskLinkJSON {
+	return taskLinkJSON(l)
+}
+
+func toTaskLinkList(ls []store.TaskLink) []taskLinkJSON {
+	out := make([]taskLinkJSON, len(ls))
+	for i, l := range ls {
+		out[i] = toTaskLinkJSON(l)
+	}
+	return out
+}
+
 func toJSON(t store.Task) taskJSON {
 	j := taskJSON{
 		ID: t.ID, ParentID: t.ParentID, ProjectID: t.ProjectID,
@@ -247,14 +296,15 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		var b struct {
-			Name  Opt[string] `json:"name"`
-			Emoji Opt[string] `json:"emoji"`
+			Name     Opt[string] `json:"name"`
+			Emoji    Opt[string] `json:"emoji"`
+			Position Opt[int]    `json:"position"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		t, err := store.UpdateType(db, id, store.TypeUpdate{Name: b.Name.Val, Emoji: b.Emoji.Val})
+		t, err := store.UpdateType(db, id, store.TypeUpdate{Name: b.Name.Val, Emoji: b.Emoji.Val, Position: b.Position.Val})
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -443,6 +493,114 @@ func Handler(db *sql.DB) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
 
+	// ── типы связей ──
+
+	mux.HandleFunc("GET /api/link-types", func(w http.ResponseWriter, r *http.Request) {
+		lts, err := store.ListLinkTypes(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"linkTypes": toLinkTypeList(lts)})
+	})
+
+	mux.HandleFunc("POST /api/link-types", func(w http.ResponseWriter, r *http.Request) {
+		var b linkTypeBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		name, reverse := "", ""
+		if b.Name.Val != nil {
+			name = *b.Name.Val
+		}
+		if b.ReverseName.Val != nil {
+			reverse = *b.ReverseName.Val
+		}
+		directed := true
+		if b.Directed.Val != nil {
+			directed = *b.Directed.Val
+		}
+		lt, err := store.CreateLinkType(db, name, reverse, directed)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"linkType": toLinkTypeJSON(lt)})
+	})
+
+	mux.HandleFunc("PATCH /api/link-types/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var b linkTypeBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		upd := store.LinkTypeUpdate{Name: b.Name.Val, ReverseName: b.ReverseName.Val, Directed: b.Directed.Val, Position: b.Position.Val}
+		lt, err := store.UpdateLinkType(db, id, upd)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"linkType": toLinkTypeJSON(lt)})
+	})
+
+	mux.HandleFunc("DELETE /api/link-types/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteLinkType(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
+	// ── связи задач ──
+
+	mux.HandleFunc("GET /api/task-links", func(w http.ResponseWriter, r *http.Request) {
+		links, err := store.ListTaskLinks(db)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"taskLinks": toTaskLinkList(links)})
+	})
+
+	mux.HandleFunc("POST /api/task-links", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			FromID int64 `json:"fromId"`
+			ToID   int64 `json:"toId"`
+			TypeID int64 `json:"typeId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
+			return
+		}
+		l, err := store.CreateTaskLink(db, b.FromID, b.ToID, b.TypeID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"taskLink": toTaskLinkJSON(l)})
+	})
+
+	mux.HandleFunc("DELETE /api/task-links/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteTaskLink(db, id); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+
 	// ── задачи ──
 
 	mux.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -576,7 +734,9 @@ func writeErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrValidation), errors.Is(err, store.ErrCycle),
 		errors.Is(err, store.ErrBadParent), errors.Is(err, store.ErrBadProject),
 		errors.Is(err, store.ErrProjectNotEmpty), errors.Is(err, store.ErrArchivedTarget),
-		errors.Is(err, store.ErrBadType), errors.Is(err, store.ErrBadPerson):
+		errors.Is(err, store.ErrBadType), errors.Is(err, store.ErrBadPerson),
+		errors.Is(err, store.ErrBadLinkType), errors.Is(err, store.ErrSelfLink),
+		errors.Is(err, store.ErrDupLink):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 	default:
 		slog.Error("внутренняя ошибка api", "err", err)

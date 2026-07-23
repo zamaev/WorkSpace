@@ -214,3 +214,64 @@ func TestDateInvariants(t *testing.T) {
 	// повтор на диапазонной — 422
 	e.patch(a.ID, map[string]any{"repeat": map[string]any{"kind": "weekly", "days": []int{1}}}, 422)
 }
+
+type linkType struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	ReverseName string `json:"reverseName"`
+	Directed    bool   `json:"directed"`
+}
+
+// Связи задач сквозь HTTP: сиды типов, создание связи, дубль/самосвязь,
+// исчезновение при soft-delete задачи.
+func TestTaskLinksFlow(t *testing.T) {
+	e := newEnv(t)
+	pid := e.project("Демо")
+	a := e.createTask(map[string]any{"title": "A", "projectId": pid})
+	b := e.createTask(map[string]any{"title": "B", "projectId": pid})
+
+	// сиды типов связей
+	var lt struct {
+		LinkTypes []linkType `json:"linkTypes"`
+	}
+	if err := json.Unmarshal(e.must("GET", "/api/link-types", nil, 200), &lt); err != nil {
+		t.Fatal(err)
+	}
+	if len(lt.LinkTypes) != 3 || lt.LinkTypes[0].Name != "порождает" {
+		t.Fatalf("сиды типов связей: %+v", lt.LinkTypes)
+	}
+	blocks := lt.LinkTypes[1].ID // «блокирует»
+
+	// A блокирует B
+	e.must("POST", "/api/task-links", map[string]any{"fromId": a.ID, "toId": b.ID, "typeId": blocks}, 201)
+	// самосвязь — 422
+	if res, _ := e.do("POST", "/api/task-links", map[string]any{"fromId": a.ID, "toId": a.ID, "typeId": blocks}); res.StatusCode != 422 {
+		t.Errorf("самосвязь: %d", res.StatusCode)
+	}
+	// дубль — 422
+	if res, _ := e.do("POST", "/api/task-links", map[string]any{"fromId": a.ID, "toId": b.ID, "typeId": blocks}); res.StatusCode != 422 {
+		t.Errorf("дубль: %d", res.StatusCode)
+	}
+	// список связей — одна
+	var tl struct {
+		TaskLinks []struct {
+			ID     int64 `json:"id"`
+			FromID int64 `json:"fromId"`
+			ToID   int64 `json:"toId"`
+		} `json:"taskLinks"`
+	}
+	if err := json.Unmarshal(e.must("GET", "/api/task-links", nil, 200), &tl); err != nil {
+		t.Fatal(err)
+	}
+	if len(tl.TaskLinks) != 1 {
+		t.Fatalf("связей %d, ждал 1", len(tl.TaskLinks))
+	}
+	// soft-delete B — связь исчезает
+	e.must("DELETE", fmt.Sprintf("/api/tasks/%d", b.ID), nil, 200)
+	if err := json.Unmarshal(e.must("GET", "/api/task-links", nil, 200), &tl); err != nil {
+		t.Fatal(err)
+	}
+	if len(tl.TaskLinks) != 0 {
+		t.Errorf("связь удалённой задачи видна: %+v", tl.TaskLinks)
+	}
+}

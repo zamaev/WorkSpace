@@ -520,6 +520,20 @@
     background: var(--asoft);
   }
 
+  /* связи задачи */
+  .link-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+  }
+  .link-row .row-btn {
+    opacity: 0;
+  }
+  .link-row:hover .row-btn {
+    opacity: 1;
+  }
+
   /* ── инспектор задачи ── */
 
   .inspector {
@@ -934,11 +948,9 @@
     border-color: var(--text);
   }
 
-  .ghost-card {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    opacity: 0.55;
+  /* продолжение многодневной / вхождение серии: то же наполнение, что у
+     живой карточки, отличие только визуальное — пунктирная рамка */
+  .card-echo {
     border-style: dashed !important;
   }
 
@@ -980,16 +992,6 @@
   }
   .task-card:hover {
     border-color: color-mix(in srgb, var(--text) 18%, transparent);
-  }
-  /* облегчённое «продолжение» многодневной задачи */
-  .span-card {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 9px;
-    border-radius: 9px;
-    border: 1px dashed var(--line);
-    color: var(--dim);
   }
   .task-card-done .task-title {
     color: var(--dim);

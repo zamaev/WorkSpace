@@ -12,6 +12,8 @@ import * as api from "./api";
 import { subtreeIds } from "./selectors";
 import type {
   CreateTaskReq,
+  LinkType,
+  TaskLink,
   Person,
   Project,
   ProjectPatch,
@@ -28,6 +30,8 @@ type Store = {
   people: Map<number, Person>;
   roles: Map<number, Role>;
   members: Map<number, number[]>; // projectId → personIds
+  linkTypes: Map<number, LinkType>;
+  taskLinks: TaskLink[];
   loading: boolean;
   offline: boolean;
   error: string | null;
@@ -45,7 +49,7 @@ type Store = {
   createType: (name: string, emoji: string) => Promise<TaskType | null>;
   patchType: (
     id: number,
-    p: Partial<{ name: string; emoji: string }>,
+    p: Partial<{ name: string; emoji: string; position: number }>,
   ) => Promise<void>;
   removeType: (id: number) => Promise<void>;
   createRole: (name: string) => Promise<Role | null>;
@@ -66,6 +70,12 @@ type Store = {
     }>,
   ) => Promise<void>;
   removePerson: (id: number) => Promise<void>;
+  createLink: (fromId: number, toId: number, typeId: number) => Promise<void>;
+  removeLink: (id: number) => Promise<void>;
+  createLinkType: (name: string, reverseName: string, directed: boolean) => Promise<LinkType | null>;
+  patchLinkType: (id: number, p: Partial<{ name: string; reverseName: string; directed: boolean; position: number }>) => Promise<void>;
+  removeLinkType: (id: number) => Promise<void>;
+  toast: (msg: string) => void;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -129,6 +139,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [people, setPeople] = useState<Map<number, Person>>(new Map());
   const [roles, setRoles] = useState<Map<number, Role>>(new Map());
   const [members, setMembersState] = useState<Map<number, number[]>>(new Map());
+  const [linkTypes, setLinkTypes] = useState<Map<number, LinkType>>(new Map());
+  const [taskLinks, setTaskLinks] = useState<TaskLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +162,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         { people: peopleList },
         { roles: roleList },
         { members: memberList },
+        { linkTypes: linkTypeList },
+        { taskLinks: taskLinkList },
       ] = await Promise.all([
         api.fetchTasks(),
         api.fetchProjects(),
@@ -157,6 +171,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         api.fetchPeople(),
         api.fetchRoles(),
         api.fetchMembers(),
+        api.fetchLinkTypes(),
+        api.fetchTaskLinks(),
       ]);
       setTasks(new Map(taskList.map((t) => [t.id, stripTask(t)])));
       setProjects(new Map(projectList.map((p) => [p.id, stripProject(p)])));
@@ -168,6 +184,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         mm.set(m.projectId, [...(mm.get(m.projectId) ?? []), m.personId]);
       }
       setMembersState(mm);
+      setLinkTypes(new Map((linkTypeList ?? []).map((l) => [l.id, l])));
+      setTaskLinks(taskLinkList ?? []);
       setOffline(false);
     } catch {
       setOffline(true);
@@ -369,7 +387,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const patchType = useCallback(
-    async (id: number, p: Partial<{ name: string; emoji: string }>) => {
+    async (
+      id: number,
+      p: Partial<{ name: string; emoji: string; position: number }>,
+    ) => {
       const snapshot = types;
       const cur = types.get(id);
       if (!cur) return;
@@ -380,6 +401,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         setTypes(snapshot);
         toast(e instanceof Error ? e.message : "Не удалось сохранить тип");
+        return;
+      }
+      // перестановка меняет позиции соседей — перечитываем список; сбой
+      // догрузки НЕ откатывает уже применённый на сервере PATCH
+      if (p.position !== undefined) {
+        try {
+          const { types: fresh } = await api.fetchTypes();
+          setTypes(new Map(fresh.map((t) => [t.id, t])));
+        } catch {
+          // порядок соседей подтянется при следующей загрузке
+        }
       }
     },
     [types, toast],
@@ -545,6 +577,89 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [people, tasks, toast],
   );
 
+  const createLink = useCallback(
+    async (fromId: number, toId: number, typeId: number) => {
+      try {
+        const { taskLink } = await api.createTaskLink(fromId, toId, typeId);
+        setTaskLinks((prev) => [...prev, taskLink]);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Не удалось связать");
+      }
+    },
+    [toast],
+  );
+
+  const removeLink = useCallback(
+    async (id: number) => {
+      const snapshot = taskLinks;
+      setTaskLinks((prev) => prev.filter((l) => l.id !== id));
+      try {
+        await api.deleteTaskLink(id);
+      } catch (e) {
+        setTaskLinks(snapshot);
+        toast(e instanceof Error ? e.message : "Не удалось снять связь");
+      }
+    },
+    [taskLinks, toast],
+  );
+
+  const createLinkType = useCallback(
+    async (name: string, reverseName: string, directed: boolean): Promise<LinkType | null> => {
+      try {
+        const { linkType } = await api.createLinkType(name, reverseName, directed);
+        setLinkTypes((prev) => new Map(prev).set(linkType.id, linkType));
+        return linkType;
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Не удалось создать тип связи");
+        return null;
+      }
+    },
+    [toast],
+  );
+
+  const patchLinkType = useCallback(
+    async (id: number, p: Partial<{ name: string; reverseName: string; directed: boolean; position: number }>) => {
+      const cur = linkTypes.get(id);
+      if (!cur) return;
+      const snapshot = linkTypes;
+      setLinkTypes((prev) => new Map(prev).set(id, { ...cur, ...p }));
+      try {
+        const { linkType } = await api.patchLinkType(id, p);
+        setLinkTypes((prev) => new Map(prev).set(id, linkType));
+        if (p.position !== undefined) {
+          const { linkTypes: fresh } = await api.fetchLinkTypes();
+          setLinkTypes(new Map(fresh.map((l) => [l.id, l])));
+        }
+      } catch (e) {
+        setLinkTypes(snapshot);
+        toast(e instanceof Error ? e.message : "Не удалось сохранить тип связи");
+      }
+    },
+    [linkTypes, toast],
+  );
+
+  const removeLinkType = useCallback(
+    async (id: number) => {
+      const typeSnapshot = linkTypes;
+      const linkSnapshot = taskLinks;
+      setLinkTypes((prev) => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+      // связи этого типа скрываются на сервере — убираем и локально
+      setTaskLinks((prev) => prev.filter((l) => l.typeId !== id));
+      try {
+        await api.deleteLinkType(id);
+      } catch (e) {
+        setLinkTypes(typeSnapshot);
+        setTaskLinks(linkSnapshot);
+        toast(e instanceof Error ? e.message : "Не удалось удалить тип связи");
+      }
+    },
+    [linkTypes, taskLinks, toast],
+  );
+
   const value = useMemo<Store>(
     () => ({
       tasks,
@@ -573,6 +688,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createPerson,
       patchPerson,
       removePerson,
+      linkTypes,
+      taskLinks,
+      createLink,
+      removeLink,
+      createLinkType,
+      patchLinkType,
+      removeLinkType,
+      toast,
     }),
     [
       tasks,
@@ -601,6 +724,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createPerson,
       patchPerson,
       removePerson,
+      linkTypes,
+      taskLinks,
+      createLink,
+      removeLink,
+      createLinkType,
+      patchLinkType,
+      removeLinkType,
+      toast,
     ],
   );
 
