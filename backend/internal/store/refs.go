@@ -71,8 +71,9 @@ func ListTypes(db *sql.DB) ([]TaskType, error) {
 }
 
 type TypeUpdate struct {
-	Name  *string
-	Emoji *string
+	Name     *string
+	Emoji    *string
+	Position *int
 }
 
 func UpdateType(db *sql.DB, id int64, r TypeUpdate) (TaskType, error) {
@@ -91,6 +92,11 @@ func UpdateType(db *sql.DB, id int64, r TypeUpdate) (TaskType, error) {
 	}
 	if _, err := db.Exec(`UPDATE task_types SET name = ?, emoji = ?, updated_at = ? WHERE id = ?`, cur.Name, cur.Emoji, now(), id); err != nil {
 		return TaskType{}, err
+	}
+	if r.Position != nil {
+		if err := reorderRef(db, "task_types", id, *r.Position); err != nil {
+			return TaskType{}, err
+		}
 	}
 	return loadType(db, id)
 }

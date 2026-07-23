@@ -670,6 +670,38 @@ func TestTypesAndPeople(t *testing.T) {
 	}
 }
 
+func TestTypeReorder(t *testing.T) {
+	e := openTest(t)
+	if _, err := CreateType(e.db, "A", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateType(e.db, "B", ""); err != nil {
+		t.Fatal(err)
+	}
+	c, err := CreateType(e.db, "C", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := func() string {
+		ts, _ := ListTypes(e.db)
+		s := ""
+		for _, x := range ts {
+			s += x.Name
+		}
+		return s
+	}
+	if names() != "ABC" {
+		t.Fatalf("исходный порядок по position: %s", names())
+	}
+	// перетащили C в начало
+	if _, err := UpdateType(e.db, c.ID, TypeUpdate{Position: new(0)}); err != nil {
+		t.Fatal(err)
+	}
+	if names() != "CAB" {
+		t.Errorf("после reorder C→0: %s (ждал CAB)", names())
+	}
+}
+
 func TestRolesAndMembers(t *testing.T) {
 	e := openTest(t)
 

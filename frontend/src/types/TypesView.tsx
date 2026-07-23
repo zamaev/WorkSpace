@@ -3,6 +3,7 @@ import { MLabel, TrashIcon } from "../components/ui";
 import { ConfirmButton } from "../components/ConfirmButton";
 import { TypeBadge } from "../components/TypeBadge";
 import { useData } from "../data/DataProvider";
+import { setDragGhost } from "../tree/dnd";
 import { plural } from "../lib/plural";
 import { lastGrapheme } from "../lib/emoji";
 import type { LinkType, TaskType } from "../data/types";
@@ -59,6 +60,7 @@ export function TypesView() {
           <TypeRow
             key={t.id}
             type={t}
+            list={list}
             taskCount={
               [...tasks.values()].filter((x) => x.typeId === t.id).length
             }
@@ -232,12 +234,21 @@ function LinkTypeRow({ type }: { type: LinkType }) {
   );
 }
 
-function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
+function TypeRow({
+  type,
+  taskCount,
+  list,
+}: {
+  type: TaskType;
+  taskCount: number;
+  list: TaskType[];
+}) {
   const { patchType, removeType } = useData();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(type.name);
   const [picker, setPicker] = useState(false);
   const [custom, setCustom] = useState("");
+  const [dropZone, setDropZone] = useState<"before" | "after" | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // при открытии показываем текущий не-пресетный смайл в поле
@@ -270,7 +281,34 @@ function TypeRow({ type, taskCount }: { type: TaskType; taskCount: number }) {
   };
 
   return (
-    <div className="prow">
+    <div
+      className={`prow relative ${dropZone === "before" ? "drop-before" : dropZone === "after" ? "drop-after" : ""}`}
+      draggable={!renaming && !picker}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-workspace-type", String(type.id));
+        setDragGhost(e, e.currentTarget as HTMLElement);
+      }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("application/x-workspace-type"))
+          return;
+        e.preventDefault();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setDropZone(e.clientY - r.top < r.height / 2 ? "before" : "after");
+      }}
+      onDragLeave={() => setDropZone(null)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const zone = dropZone;
+        setDropZone(null);
+        const dragId = Number(
+          e.dataTransfer.getData("application/x-workspace-type"),
+        );
+        if (!Number.isFinite(dragId) || dragId === type.id) return;
+        const others = list.filter((x) => x.id !== dragId);
+        const idx = others.findIndex((x) => x.id === type.id);
+        void patchType(dragId, { position: zone === "before" ? idx : idx + 1 });
+      }}
+    >
       <div className="relative flex items-center" ref={pickerRef}>
         <button
           type="button"

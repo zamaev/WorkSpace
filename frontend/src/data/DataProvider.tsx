@@ -49,7 +49,7 @@ type Store = {
   createType: (name: string, emoji: string) => Promise<TaskType | null>;
   patchType: (
     id: number,
-    p: Partial<{ name: string; emoji: string }>,
+    p: Partial<{ name: string; emoji: string; position: number }>,
   ) => Promise<void>;
   removeType: (id: number) => Promise<void>;
   createRole: (name: string) => Promise<Role | null>;
@@ -386,7 +386,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const patchType = useCallback(
-    async (id: number, p: Partial<{ name: string; emoji: string }>) => {
+    async (
+      id: number,
+      p: Partial<{ name: string; emoji: string; position: number }>,
+    ) => {
       const snapshot = types;
       const cur = types.get(id);
       if (!cur) return;
@@ -397,6 +400,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         setTypes(snapshot);
         toast(e instanceof Error ? e.message : "Не удалось сохранить тип");
+        return;
+      }
+      // перестановка меняет позиции соседей — перечитываем список; сбой
+      // догрузки НЕ откатывает уже применённый на сервере PATCH
+      if (p.position !== undefined) {
+        try {
+          const { types: fresh } = await api.fetchTypes();
+          setTypes(new Map(fresh.map((t) => [t.id, t])));
+        } catch {
+          // порядок соседей подтянется при следующей загрузке
+        }
       }
     },
     [types, toast],

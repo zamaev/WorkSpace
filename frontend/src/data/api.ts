@@ -107,7 +107,7 @@ export function createType(
 
 export function patchType(
   id: number,
-  patch: Partial<{ name: string; emoji: string }>,
+  patch: Partial<{ name: string; emoji: string; position: number }>,
 ): Promise<{ type: TaskType }> {
   return request(`/api/types/${id}`, {
     method: "PATCH",

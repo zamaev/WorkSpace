@@ -296,14 +296,15 @@ func Handler(db *sql.DB) http.Handler {
 			return
 		}
 		var b struct {
-			Name  Opt[string] `json:"name"`
-			Emoji Opt[string] `json:"emoji"`
+			Name     Opt[string] `json:"name"`
+			Emoji    Opt[string] `json:"emoji"`
+			Position Opt[int]    `json:"position"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "невалидный JSON"})
 			return
 		}
-		t, err := store.UpdateType(db, id, store.TypeUpdate{Name: b.Name.Val, Emoji: b.Emoji.Val})
+		t, err := store.UpdateType(db, id, store.TypeUpdate{Name: b.Name.Val, Emoji: b.Emoji.Val, Position: b.Position.Val})
 		if err != nil {
 			writeErr(w, err)
 			return
