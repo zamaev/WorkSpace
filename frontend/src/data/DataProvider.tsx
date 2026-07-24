@@ -287,6 +287,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const remove = useCallback(
     async (id: number) => {
       const doomed = new Set(subtreeIds(tasks, id));
+      // связи и заметки удаляемого поддерева тоже прячем локально — сервер
+      // скрывает их через JOIN, а без этого до перезагрузки в инспекторах
+      // других задач и в заметках висели бы мёртвые строки
+      const linksSnapshot = taskLinks;
+      const taskNotesSnapshot = taskNotes;
       setTasks((prev) => {
         const next = new Map<number, Task>();
         for (const [tid, t] of prev) {
@@ -294,14 +299,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         return next;
       });
+      setTaskLinks((prev) =>
+        prev.filter((l) => !doomed.has(l.fromId) && !doomed.has(l.toId)),
+      );
+      setTaskNotes((prev) => prev.filter((tn) => !doomed.has(tn.taskId)));
       try {
         await api.deleteTask(id);
       } catch (e) {
         toast(e instanceof Error ? e.message : "Не удалось удалить");
+        setTaskLinks(linksSnapshot);
+        setTaskNotes(taskNotesSnapshot);
         void restoreTasks();
       }
     },
-    [tasks, toast, restoreTasks],
+    [tasks, taskLinks, taskNotes, toast, restoreTasks],
   );
 
   const createProject = useCallback(
@@ -719,19 +730,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const removeNote = useCallback(
     async (id: number) => {
       const doomed = new Set(noteSubtreeIds(notes, id));
+      // привязки к задачам удаляемого поддерева заметок прячем локально —
+      // иначе до перезагрузки в инспекторах задач висели бы мёртвые строки
+      const taskNotesSnapshot = taskNotes;
       setNotes((prev) => {
         const next = new Map<number, Note>();
         for (const [nid, n] of prev) if (!doomed.has(nid)) next.set(nid, n);
         return next;
       });
+      setTaskNotes((prev) => prev.filter((tn) => !doomed.has(tn.noteId)));
       try {
         await api.deleteNote(id);
       } catch (e) {
         toast(e instanceof Error ? e.message : "Не удалось удалить");
+        setTaskNotes(taskNotesSnapshot);
         void restoreNotes();
       }
     },
-    [notes, toast, restoreNotes],
+    [notes, taskNotes, toast, restoreNotes],
   );
 
   const patchLinkType = useCallback(
