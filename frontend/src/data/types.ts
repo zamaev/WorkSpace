@@ -9,6 +9,21 @@ export type Project = {
   position: number;
 };
 
+export type Note = {
+  id: number;
+  parentId: number | null;
+  title: string;
+  body: string;
+  position: number;
+};
+
+export type NotePatch = Partial<{
+  title: string;
+  body: string;
+  parentId: number | null;
+  position: number;
+}>;
+
 export type LinkType = {
   id: number;
   name: string;
@@ -22,6 +37,12 @@ export type TaskLink = {
   fromId: number;
   toId: number;
   typeId: number;
+};
+
+export type TaskNote = {
+  id: number;
+  taskId: number;
+  noteId: number;
 };
 
 export type TaskType = {

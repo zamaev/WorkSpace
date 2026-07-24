@@ -23,6 +23,7 @@ import { AnchoredPopover } from "./AnchoredPopover";
 import { DatePicker, DueDatePicker } from "./DatePicker";
 import { TypeBadge } from "./TypeBadge";
 import { TaskLinks } from "./TaskLinks";
+import { TaskNotes } from "./TaskNotes";
 
 type PickerKind = "plan" | "due" | "type" | "assignee" | "repeat" | null;
 
@@ -461,7 +462,9 @@ export function TaskDetails({
         </AnchoredPopover>
       )}
 
-      <TaskLinks task={task} onClose={onClose} />
+      <TaskLinks task={task} />
+
+      <TaskNotes task={task} />
 
       <div>
         <MLabel className="pb-1">Описание</MLabel>
@@ -510,9 +513,9 @@ export function TaskDetails({
             <TrashIcon /> Удалить
           </ConfirmButton>
           <Link
-            to={`/projects/${task.projectId}?focus=${task.id}`}
+            to={`/projects/${task.projectId}?task=${task.id}`}
+            state={{ focus: task.id }}
             className="mmeta !text-accent"
-            onClick={onClose}
           >
             в дереве →
           </Link>

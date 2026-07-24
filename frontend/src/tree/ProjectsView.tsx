@@ -10,14 +10,9 @@ import {
 import { TaskDetails } from "../components/TaskDetails";
 import { PALETTE, nextColor, type Project } from "../data/types";
 import { getDragTask, hasDragTask, setDragGhost } from "./dnd";
-import { uiZoom } from "../lib/zoom";
-import {
-  SELECTED_TASK_KEY,
-  TWO_WEEKS_KEY,
-  WEEKENDS_KEY,
-  readPref,
-  writePref,
-} from "../lib/prefs";
+import { ColResize, readWidth } from "../components/ColResize";
+import { TWO_WEEKS_KEY, WEEKENDS_KEY, readPref } from "../lib/prefs";
+import { useTaskParam } from "../lib/useTaskParam";
 import {
   addDays,
   dayDiff,
@@ -33,42 +28,6 @@ export const LAST_PROJECT_KEY = "workspace-last-project";
 const SIDE_W_KEY = "workspace-col-side";
 const INSP_W_KEY = "workspace-col-inspector";
 
-function readWidth(key: string, def: number, min: number, max: number): number {
-  try {
-    const v = Number(localStorage.getItem(key));
-    if (Number.isFinite(v) && v >= min && v <= max) return v;
-  } catch {
-    // приватный режим — дефолт
-  }
-  return def;
-}
-
-// Ручка изменения ширины колонки: pointer-drag, ширина через колбэк.
-// Сохранение делает сам onDelta: pointerup замыкал бы значение старого рендера.
-function ColResize({ onDelta }: { onDelta: (dx: number) => void }) {
-  const [active, setActive] = useState(false);
-  return (
-    <div
-      className={`col-resize ${active ? "col-resize-active" : ""}`}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        setActive(true);
-        let lastX = e.clientX;
-        const z = uiZoom();
-        const onMove = (ev: PointerEvent) => {
-          onDelta((ev.clientX - lastX) / z);
-          lastX = ev.clientX;
-        };
-        const onUp = () => {
-          window.removeEventListener("pointermove", onMove);
-          setActive(false);
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp, { once: true });
-      }}
-    />
-  );
-}
 const PROJ_MIME = "application/x-workspace-project";
 const PROJ_CLOSED_KEY = "workspace-projects-closed";
 
@@ -178,15 +137,11 @@ function DragWeekStrip() {
 export function ProjectsView() {
   const { pid } = useParams();
   const { projects, tasks, loading, offline, retry } = useData();
-  const [selected, setSelectedState] = useState<number | null>(() => {
-    const raw = readPref(SELECTED_TASK_KEY);
-    return raw ? Number(raw) : null;
-  });
+  // выбранная задача — в URL (?task, см. useTaskParam). Меняется только
+  // query, роут /projects/:pid не пересобирается, поэтому состояние дерева
+  // (раскрытия, скролл) сохраняется.
+  const [selected, setSelected] = useTaskParam();
   const [focusDescNonce, setFocusDescNonce] = useState(0);
-  const setSelected = (id: number | null) => {
-    setSelectedState(id);
-    writePref(SELECTED_TASK_KEY, id === null ? null : String(id));
-  };
   const onCreateTask = (id: number) => {
     setSelected(id);
     setFocusDescNonce((n) => n + 1);

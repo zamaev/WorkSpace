@@ -56,7 +56,9 @@ export function TaskCard({
 
   return (
     <div
-      className={`task-card cursor-pointer ${echo ? "card-echo" : task.done ? "task-card-done" : ""} ${dropBefore ? "card-drop-before" : ""}`}
+      className={`task-card cursor-pointer ${echo ? "card-echo" : ""} ${
+        !isGhost && task.done ? "task-card-done" : ""
+      } ${dropBefore ? "card-drop-before" : ""}`}
       style={{ borderLeft: `3px solid ${color}` }}
       draggable={isLive}
       title={

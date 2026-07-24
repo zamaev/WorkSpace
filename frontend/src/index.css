@@ -520,6 +520,494 @@
     background: var(--asoft);
   }
 
+  /* ── заметки ── */
+
+  .notes-layout {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .notes-side {
+    width: var(--notes-w, 280px);
+    flex: none;
+    position: sticky;
+    top: 14px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  /* дерево заметок плотнее общего .tree-row (десктоп-раздел, тач-таргеты
+     тут не критичны) — компактный список в духе Outline/Notion */
+  .notes-side .tree-row {
+    min-height: 26px;
+    padding: 1px 6px;
+    gap: 5px;
+    border-radius: 7px;
+  }
+  .notes-side .chevron {
+    width: 16px;
+    height: 16px;
+  }
+  /* белая панель редактора обнимает текст (не растягивается на всю ширину),
+     справа остаётся серое поле под оглавление */
+  .notes-editor {
+    flex: 0 1 812px;
+    min-width: 0;
+    min-height: calc(100vh - 120px);
+  }
+  /* мобильный: дерево и редактор друг под другом */
+  @media (max-width: 720px) {
+    .notes-layout {
+      flex-direction: column;
+    }
+    .notes-side {
+      width: 100%;
+      position: static;
+      max-height: 44vh;
+    }
+    .notes-editor {
+      width: 100%;
+      min-height: 55vh;
+    }
+    /* ресайз-ручка бессмысленна, когда колонки стоят стопкой */
+    .notes-layout > .col-resize {
+      display: none;
+    }
+  }
+  /* документ-колонка: ограничиваем длину строки для читаемости (~80
+     символов). Прижата влево (не центр) — компактнее рядом с деревом, а
+     справа остаётся место под будущее оглавление */
+  .note-doc {
+    max-width: 760px;
+  }
+  /* внешний ряд: белая панель + оглавление в сером поле; сам ряд без фона */
+  .note-editor-wide {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .note-toc {
+    flex: none;
+    width: 190px;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+  }
+  .note-toc-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: 12.5px;
+    line-height: 1.3;
+    color: var(--dim);
+    padding: 2px 6px;
+    border-radius: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .note-toc-item:hover {
+    background: var(--asoft);
+    color: var(--text);
+  }
+  /* хлебные крошки над заголовком заметки */
+  .note-crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 6px;
+  }
+  .note-crumb {
+    font-size: 12px;
+    color: var(--dim);
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .note-crumb:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+  .note-crumb:not(:last-child)::after {
+    content: "/";
+    color: var(--line);
+    margin-left: 4px;
+  }
+  /* строка «Задачи» в заметке — чипы прикреплённых задач */
+  .note-tasks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0 10px;
+  }
+  .note-task-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 240px;
+    font-size: 12.5px;
+    padding: 2px 7px 2px 9px;
+    border-radius: 20px;
+    background: var(--asoft);
+    color: var(--accent);
+  }
+  .note-task-chip-x {
+    flex: none;
+    opacity: 0.55;
+    font-size: 11px;
+  }
+  .note-task-chip-x:hover {
+    opacity: 1;
+  }
+  /* узкий экран: оглавление прячем, чтобы не сжимать текст */
+  @media (max-width: 1080px) {
+    .note-toc {
+      display: none;
+    }
+  }
+  /* wiki-ссылка на другую заметку */
+  .ProseMirror .wiki-link {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    padding: 0 4px;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ProseMirror .wiki-link:hover {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+  /* поповер автокомплита wiki-ссылок (по «[[») */
+  .wiki-popup {
+    position: fixed;
+    z-index: 100;
+    min-width: 200px;
+    max-width: 300px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    padding: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .wiki-popup-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: 13px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wiki-popup-item:hover,
+  .wiki-popup-item.is-sel {
+    background: var(--asoft);
+  }
+  .wiki-popup-empty {
+    padding: 6px 8px;
+    font-size: 12.5px;
+    color: var(--dim);
+  }
+  /* таблицы */
+  .ProseMirror .tableWrapper {
+    overflow-x: auto;
+    margin: 0.5em 0;
+  }
+  .ProseMirror table {
+    border-collapse: collapse;
+    width: auto;
+  }
+  .ProseMirror table td,
+  .ProseMirror table th {
+    border: 1px solid var(--line);
+    padding: 5px 9px;
+    vertical-align: top;
+    text-align: left;
+    min-width: 60px;
+  }
+  .ProseMirror table th {
+    background: var(--asoft);
+    font-weight: 700;
+  }
+  .ProseMirror table p {
+    margin: 0;
+  }
+  .ProseMirror .selectedCell {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+  }
+  /* панель форматирования WYSIWYG-редактора */
+  .note-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-wrap: wrap;
+    padding: 4px 0 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .note-tool {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 7px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--dim);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .note-tool:hover {
+    background: var(--asoft);
+    color: var(--text);
+  }
+  .note-tool-on {
+    background: var(--asoft);
+    color: var(--accent);
+  }
+  .note-tool-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--line);
+    margin: 0 3px;
+    flex: none;
+  }
+  /* WYSIWYG-поле (ProseMirror): пишешь и сразу видишь форматирование */
+  .ProseMirror {
+    outline: none;
+    min-height: 55vh;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--dim);
+    opacity: 0.55;
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+  .ProseMirror h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0.7em 0 0.2em;
+  }
+  .ProseMirror h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0.7em 0 0.2em;
+  }
+  .ProseMirror h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0.7em 0 0.2em;
+  }
+  .ProseMirror p {
+    margin: 0.3em 0;
+  }
+  .ProseMirror ul,
+  .ProseMirror ol {
+    margin: 0.35em 0;
+    padding-left: 1.4em;
+  }
+  .ProseMirror ul {
+    list-style: disc;
+  }
+  .ProseMirror ol {
+    list-style: decimal;
+  }
+  .ProseMirror li {
+    margin: 0.1em 0;
+  }
+  /* содержимое пункта — абзац без вертикального margin, иначе элементы
+     списка разъезжаются как несвязанные */
+  .ProseMirror li > p {
+    margin: 0;
+  }
+  /* вложенные списки плотнее */
+  .ProseMirror li > ul,
+  .ProseMirror li > ol {
+    margin: 0.1em 0;
+  }
+  /* чек-лист: чекбокс + текст в строку, без маркера; сделанные — приглушены */
+  .ProseMirror ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0.1em;
+  }
+  .ProseMirror ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .ProseMirror ul[data-type="taskList"] li > label {
+    flex: none;
+    margin-top: 3px;
+    user-select: none;
+  }
+  .ProseMirror ul[data-type="taskList"] li > div {
+    flex: 1;
+    min-width: 0;
+  }
+  /* без вертикального margin у абзаца — иначе текст съезжает от чекбокса */
+  .ProseMirror ul[data-type="taskList"] li > div > p {
+    margin: 0;
+  }
+  .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+    color: var(--dim);
+    text-decoration: line-through;
+  }
+  .ProseMirror blockquote {
+    margin: 0.5em 0;
+    padding: 0.2em 0 0.2em 0.9em;
+    border-left: 3px solid var(--accent);
+    color: var(--dim);
+  }
+  .ProseMirror code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.88em;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 5px;
+  }
+  .ProseMirror pre {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 0.5em 0;
+  }
+  /* блок кода с NodeView: шапка-селектор языка + (для mermaid) диаграмма */
+  .ProseMirror .code-block {
+    margin: 0.5em 0;
+  }
+  .code-block-head {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -6px;
+  }
+  .code-lang {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--dim);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+  .code-block .mermaid-render {
+    display: flex;
+    justify-content: center;
+    padding: 14px;
+    margin-top: 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    overflow-x: auto;
+  }
+  .code-block .mermaid-render svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .code-block .mermaid-error {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--over);
+    border-radius: 8px;
+    color: var(--over);
+    font-size: 12px;
+  }
+  .ProseMirror pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.86em;
+  }
+  /* подсветка синтаксиса (highlight.js токены); тёмная тема — по умолчанию */
+  .ProseMirror pre .hljs-comment,
+  .ProseMirror pre .hljs-quote {
+    color: #6b7178;
+    font-style: italic;
+  }
+  .ProseMirror pre .hljs-keyword,
+  .ProseMirror pre .hljs-built_in,
+  .ProseMirror pre .hljs-literal {
+    color: #c678dd;
+  }
+  .ProseMirror pre .hljs-string,
+  .ProseMirror pre .hljs-regexp,
+  .ProseMirror pre .hljs-meta .hljs-string {
+    color: #98c379;
+  }
+  .ProseMirror pre .hljs-number {
+    color: #d19a66;
+  }
+  .ProseMirror pre .hljs-title,
+  .ProseMirror pre .hljs-title.function_ {
+    color: #61afef;
+  }
+  .ProseMirror pre .hljs-attr,
+  .ProseMirror pre .hljs-attribute,
+  .ProseMirror pre .hljs-property {
+    color: #e5c07b;
+  }
+  .ProseMirror pre .hljs-type,
+  .ProseMirror pre .hljs-symbol,
+  .ProseMirror pre .hljs-meta {
+    color: #56b6c2;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-comment,
+  [data-theme="light"] .ProseMirror pre .hljs-quote {
+    color: #a0a1a7;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-keyword,
+  [data-theme="light"] .ProseMirror pre .hljs-built_in,
+  [data-theme="light"] .ProseMirror pre .hljs-literal {
+    color: #a626a4;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-string,
+  [data-theme="light"] .ProseMirror pre .hljs-regexp,
+  [data-theme="light"] .ProseMirror pre .hljs-meta .hljs-string {
+    color: #50a14f;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-number {
+    color: #986801;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-title,
+  [data-theme="light"] .ProseMirror pre .hljs-title.function_ {
+    color: #4078f2;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-attr,
+  [data-theme="light"] .ProseMirror pre .hljs-attribute,
+  [data-theme="light"] .ProseMirror pre .hljs-property {
+    color: #c18401;
+  }
+  [data-theme="light"] .ProseMirror pre .hljs-type,
+  [data-theme="light"] .ProseMirror pre .hljs-symbol,
+  [data-theme="light"] .ProseMirror pre .hljs-meta {
+    color: #0184bc;
+  }
+  .ProseMirror a {
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .ProseMirror hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 1em 0;
+  }
+
   /* связи задачи */
   .link-row {
     display: flex;

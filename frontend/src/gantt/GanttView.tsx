@@ -10,6 +10,7 @@ import { TaskModal } from "../components/TaskDetails";
 import { TypeBadge } from "../components/TypeBadge";
 import { useTaskFilters } from "../components/TaskFilters";
 import { useData } from "../data/DataProvider";
+import { useTaskParam } from "../lib/useTaskParam";
 import { uiZoom } from "../lib/zoom";
 import { ghostOccurrences } from "../lib/repeat";
 import { collapseSeries } from "./series";
@@ -229,7 +230,8 @@ export function GanttView() {
   });
   const [nameW, setNameW] = useState<number>(loadNameW);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [modalTask, setModalTask] = useState<number | null>(null);
+  // открытая в модалке задача — в URL (?task): deep-link и «назад» из заметки
+  const [modalTask, setModalTask] = useTaskParam();
   const { matches, bar: filterBar } = useTaskFilters();
   const [showArchived, setShowArchived] = useState(() => {
     try {
@@ -560,7 +562,7 @@ export function GanttView() {
           />
         </div>
       </div>
-      {modalTask !== null && (
+      {modalTask !== null && tasks.has(modalTask) && (
         <TaskModal taskId={modalTask} onClose={() => setModalTask(null)} />
       )}
       <p className="pt-3 text-[12px] text-dim">

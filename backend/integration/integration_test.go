@@ -215,6 +215,77 @@ func TestDateInvariants(t *testing.T) {
 	e.patch(a.ID, map[string]any{"repeat": map[string]any{"kind": "weekly", "days": []int{1}}}, 422)
 }
 
+type note struct {
+	ID       int64  `json:"id"`
+	ParentID *int64 `json:"parentId"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	Position int    `json:"position"`
+}
+
+func (e env) createNote(body map[string]any) note {
+	b := e.must("POST", "/api/notes", body, 201)
+	var out struct {
+		Note note `json:"note"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		e.t.Fatal(err)
+	}
+	return out.Note
+}
+
+func (e env) notes() []note {
+	b := e.must("GET", "/api/notes", nil, 200)
+	var out struct {
+		Notes []note `json:"notes"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		e.t.Fatal(err)
+	}
+	return out.Notes
+}
+
+// Заметки сквозь HTTP: создание дерева, правка тела, каскадное мягкое
+// удаление, защита от цикла.
+func TestNotesFlow(t *testing.T) {
+	e := newEnv(t)
+	root := e.createNote(map[string]any{"title": "Корень"})
+	child := e.createNote(map[string]any{"title": "Ребёнок", "parentId": root.ID})
+	e.createNote(map[string]any{"title": "Внук", "parentId": child.ID})
+
+	// правка тела
+	e.must("PATCH", fmt.Sprintf("/api/notes/%d", root.ID), map[string]any{"body": "# Привет\n**markdown**"}, 200)
+	for _, n := range e.notes() {
+		if n.ID == root.ID && n.Body != "# Привет\n**markdown**" {
+			t.Errorf("тело не сохранилось: %q", n.Body)
+		}
+	}
+	// цикл: корень под своего внука — 422
+	var grand int64
+	for _, n := range e.notes() {
+		if n.Title == "Внук" {
+			grand = n.ID
+		}
+	}
+	res, _ := e.do("PATCH", fmt.Sprintf("/api/notes/%d", root.ID), map[string]any{"parentId": grand})
+	if res.StatusCode != 422 {
+		t.Errorf("цикл: статус %d, ждал 422", res.StatusCode)
+	}
+	// каскадное удаление корня — три записи, список пуст
+	var del struct {
+		Deleted int `json:"deleted"`
+	}
+	if err := json.Unmarshal(e.must("DELETE", fmt.Sprintf("/api/notes/%d", root.ID), nil, 200), &del); err != nil {
+		t.Fatal(err)
+	}
+	if del.Deleted != 3 {
+		t.Errorf("каскад: удалено %d, ждал 3", del.Deleted)
+	}
+	if got := e.notes(); len(got) != 0 {
+		t.Errorf("после удаления: %+v", got)
+	}
+}
+
 type linkType struct {
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`

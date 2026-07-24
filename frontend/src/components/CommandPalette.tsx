@@ -5,7 +5,8 @@ import { paletteMatches, type PaletteItem } from "../lib/palette";
 import { SDot } from "./ui";
 
 // ⌘K/Ctrl+K — палитра поиска по задачам и активным проектам. Выбор ведёт
-// в «Проекты»: задача — с раскрытием пути и подсветкой (?focus=).
+// в «Проекты»: задача открывается в инспекторе (?task), а раскрытие пути и
+// подсветка в дереве приходят разовым сигналом в navigation state.
 export function CommandPalette() {
   const { tasks, projects } = useData();
   const navigate = useNavigate();
@@ -38,7 +39,10 @@ export function CommandPalette() {
   const go = (item: PaletteItem) => {
     setOpen(false);
     if (item.kind === "project") navigate(`/projects/${item.id}`);
-    else navigate(`/projects/${item.projectId}?focus=${item.id}`);
+    else
+      navigate(`/projects/${item.projectId}?task=${item.id}`, {
+        state: { focus: item.id },
+      });
   };
 
   const scrollTo = (i: number) => {

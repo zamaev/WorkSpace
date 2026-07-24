@@ -1,7 +1,10 @@
 import type {
   CreateTaskReq,
+  Note,
+  NotePatch,
   LinkType,
   TaskLink,
+  TaskNote,
   Person,
   Project,
   ProjectPatch,
@@ -119,6 +122,34 @@ export function deleteType(id: number): Promise<{ ok: boolean }> {
   return request(`/api/types/${id}`, { method: "DELETE" });
 }
 
+export function fetchNotes(): Promise<{ notes: Note[] }> {
+  return request("/api/notes");
+}
+
+export function createNote(
+  title: string,
+  parentId: number | null,
+): Promise<{ note: Note }> {
+  return request("/api/notes", {
+    method: "POST",
+    body: JSON.stringify({ title, parentId }),
+  });
+}
+
+export function patchNote(
+  id: number,
+  patch: NotePatch,
+): Promise<{ notes: Note[] }> {
+  return request(`/api/notes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteNote(id: number): Promise<{ deleted: number }> {
+  return request(`/api/notes/${id}`, { method: "DELETE" });
+}
+
 export function fetchLinkTypes(): Promise<{ linkTypes: LinkType[] }> {
   return request("/api/link-types");
 }
@@ -165,6 +196,24 @@ export function createTaskLink(
 
 export function deleteTaskLink(id: number): Promise<{ ok: boolean }> {
   return request(`/api/task-links/${id}`, { method: "DELETE" });
+}
+
+export function fetchTaskNotes(): Promise<{ taskNotes: TaskNote[] }> {
+  return request("/api/task-notes");
+}
+
+export function createTaskNote(
+  taskId: number,
+  noteId: number,
+): Promise<{ taskNote: TaskNote }> {
+  return request("/api/task-notes", {
+    method: "POST",
+    body: JSON.stringify({ taskId, noteId }),
+  });
+}
+
+export function deleteTaskNote(id: number): Promise<{ ok: boolean }> {
+  return request(`/api/task-notes/${id}`, { method: "DELETE" });
 }
 
 export function fetchPeople(): Promise<{ people: Person[] }> {
