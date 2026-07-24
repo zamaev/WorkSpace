@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ColResize } from "../components/ColResize";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -33,11 +33,29 @@ export function NoteEditor({
   width: number;
   onResizeDelta: (dx: number) => void;
 }) {
-  const { patchNote, notes } = useData();
+  const { patchNote, patchNoteLocal, notes } = useData();
   const navigate = useNavigate();
-  const [title, setTitle] = useState(note.title);
+  const location = useLocation();
+  // фокус в заголовок сразу после создания заметки (флаг в navigation state);
+  // при открытии существующей его нет — курсор туда не прыгает
+  const focusTitle = !!(location.state as { focusTitle?: boolean } | null)
+    ?.focusTitle;
   const path = noteAncestors(notes, note.id);
   const [toc, setToc] = useState<TocItem[]>([]);
+
+  // заголовок — управляемый от notes: ввод и в дереве, и в редакторе сразу
+  // отражается в обоих (patchNoteLocal обновляет notes мгновенно), а запрос
+  // на сервер идёт с паузой. Отдельный таймер, чтобы не мешать автосейву тела.
+  const noteRef = useRef(note);
+  noteRef.current = note;
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTitleDebounced = (v: string) => {
+    if (titleTimer.current) clearTimeout(titleTimer.current);
+    titleTimer.current = setTimeout(() => {
+      titleTimer.current = null;
+      void patchNote(noteRef.current.id, { title: v });
+    }, 700);
+  };
 
   // актуальный список заметок для автокомплита wiki-ссылок (редактор создаётся
   // один раз — читаем через ref, чтобы видеть свежие заметки)
@@ -96,8 +114,18 @@ export function NoteEditor({
   });
 
   // размонтирование (смена заметки — компонент с key={id}) доигрывает
-  // отложенное сохранение, чтобы не потерять последние символы
-  useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // отложенные сохранения тела и заголовка, чтобы не потерять последние символы
+  useEffect(() => {
+    return () => {
+      flush();
+      if (titleTimer.current) {
+        clearTimeout(titleTimer.current);
+        titleTimer.current = null;
+        void patchNote(noteRef.current.id, { title: noteRef.current.title });
+      }
+    };
+    // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // оглавление из заголовков тела; пересчитывается при правках. Доступ к
   // view.dom в tiptap v3 бросает до монтирования — ждём событие create и
@@ -140,10 +168,6 @@ export function NoteEditor({
     }
   };
 
-  const saveTitle = (v: string) => {
-    if (v !== note.title) void patchNote(note.id, { title: v });
-  };
-
   return (
     <div
       className="note-editor-wide"
@@ -170,15 +194,19 @@ export function NoteEditor({
         name="note-title-main"
         aria-label="Заголовок заметки"
         placeholder="Без названия"
-        value={title}
+        value={note.title}
+        autoFocus={focusTitle}
         onChange={(e) => {
           const v = e.target.value;
-          setTitle(v);
-          debounced(() => saveTitle(v));
+          patchNoteLocal(note.id, { title: v }); // мгновенно: дерево + это поле
+          saveTitleDebounced(v); // на сервер — с паузой
         }}
         onBlur={() => {
-          flush();
-          saveTitle(title);
+          if (titleTimer.current) {
+            clearTimeout(titleTimer.current);
+            titleTimer.current = null;
+          }
+          void patchNote(note.id, { title: note.title });
         }}
         onKeyDown={(e) => {
           // Enter в заголовке — уводим фокус в тело

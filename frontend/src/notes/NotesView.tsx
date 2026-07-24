@@ -97,7 +97,7 @@ export function NotesView() {
 
   const addRoot = async () => {
     const n = await createNote("", null);
-    if (n) navigate(`/notes/${n.id}`);
+    if (n) navigate(`/notes/${n.id}`, { state: { focusTitle: true } });
   };
 
   return (
@@ -250,7 +250,8 @@ function NoteNode({
   toggleOpen: (id: number) => void;
   selectedId: number | null;
 }): ReactNode {
-  const { notes, createNote, patchNote, removeNote } = useData();
+  const { notes, createNote, patchNote, patchNoteLocal, removeNote } =
+    useData();
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [zone, setZone] = useState<DropZone>(null);
@@ -262,7 +263,7 @@ function NoteNode({
   const addChild = async () => {
     if (closed.has(note.id)) toggleOpen(note.id);
     const n = await createNote("", note.id);
-    if (n) navigate(`/notes/${n.id}`);
+    if (n) navigate(`/notes/${n.id}`, { state: { focusTitle: true } });
   };
 
   const computeZone = (e: DragEvent): DropZone => {
@@ -343,9 +344,10 @@ function NoteNode({
         {renaming ? (
           <RenameInput
             initial={note.title}
+            onLive={(v) => patchNoteLocal(note.id, { title: v })}
             onDone={(title) => {
               setRenaming(false);
-              if (title !== note.title) void patchNote(note.id, { title });
+              void patchNote(note.id, { title });
             }}
           />
         ) : (
@@ -413,12 +415,17 @@ function NoteNode({
 
 function RenameInput({
   initial,
+  onLive,
   onDone,
 }: {
   initial: string;
+  onLive?: (v: string) => void;
   onDone: (title: string) => void;
 }) {
   const [value, setValue] = useState(initial);
+  // исходное имя на момент старта — для отката по Escape (onLive по ходу
+  // ввода уже меняет notes, поэтому «initial» к концу правки не исходный)
+  const original = useRef(initial);
   return (
     <input
       className="ghost-input flex-1 text-[13.5px]"
@@ -427,11 +434,14 @@ function RenameInput({
       value={value}
       autoFocus
       onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setValue(e.target.value)}
+      onChange={(e) => {
+        setValue(e.target.value);
+        onLive?.(e.target.value); // синхронно отражаем в редакторе
+      }}
       onBlur={() => onDone(value.trim())}
       onKeyDown={(e) => {
         if (e.key === "Enter") onDone(value.trim());
-        if (e.key === "Escape") onDone(initial);
+        if (e.key === "Escape") onDone(original.current);
       }}
     />
   );

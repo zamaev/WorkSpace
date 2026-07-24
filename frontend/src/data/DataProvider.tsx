@@ -77,6 +77,9 @@ type Store = {
   removePerson: (id: number) => Promise<void>;
   createNote: (title: string, parentId: number | null) => Promise<Note | null>;
   patchNote: (id: number, p: NotePatch) => Promise<void>;
+  // мгновенное локальное обновление заметки без запроса на сервер — для
+  // синхронного отражения ввода заголовка в дереве и редакторе одновременно
+  patchNoteLocal: (id: number, p: NotePatch) => void;
   removeNote: (id: number) => Promise<void>;
   createLink: (fromId: number, toId: number, typeId: number) => Promise<void>;
   removeLink: (id: number) => Promise<void>;
@@ -727,6 +730,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [notes, mergeNotes, toast, restoreNotes],
   );
 
+  const patchNoteLocal = useCallback((id: number, p: NotePatch) => {
+    setNotes((prev) => {
+      const cur = prev.get(id);
+      if (!cur) return prev;
+      return new Map(prev).set(id, { ...cur, ...p });
+    });
+  }, []);
+
   const removeNote = useCallback(
     async (id: number) => {
       const doomed = new Set(noteSubtreeIds(notes, id));
@@ -824,6 +835,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notes,
       createNote,
       patchNote,
+      patchNoteLocal,
       removeNote,
       linkTypes,
       taskLinks,
@@ -867,6 +879,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notes,
       createNote,
       patchNote,
+      patchNoteLocal,
       removeNote,
       linkTypes,
       taskLinks,
