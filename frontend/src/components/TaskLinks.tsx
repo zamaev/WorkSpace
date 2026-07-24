@@ -4,6 +4,7 @@ import { useData } from "../data/DataProvider";
 import type { Task } from "../data/types";
 import { groupLinks, linksForTask } from "../lib/links";
 import { AnchoredPopover } from "./AnchoredPopover";
+import { ConfirmButton } from "./ConfirmButton";
 import { MLabel } from "./ui";
 
 // Секция «Связи» в инспекторе задачи: списки связей по подписям + пикер
@@ -58,14 +59,15 @@ export function TaskLinks({ task }: { task: Task }) {
                       >
                         {other?.title ?? "—"}
                       </button>
-                      <button
-                        type="button"
+                      <ConfirmButton
                         className="row-btn row-btn-danger"
                         title="Снять связь"
-                        onClick={() => void removeLink(it.linkId)}
+                        message="Снять связь между задачами?"
+                        confirmLabel="Снять"
+                        onConfirm={() => void removeLink(it.linkId)}
                       >
                         ✕
-                      </button>
+                      </ConfirmButton>
                     </div>
                   );
                 })}
