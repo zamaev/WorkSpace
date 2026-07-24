@@ -1,5 +1,6 @@
 import type { LinkType, TaskLink } from "../data/types";
 
+// otherId — logical_id задачи на другом конце связи
 export type LinkView = { linkId: number; label: string; otherId: number };
 
 // Связи задачи с её точки зрения: сторона from показывает прямую подпись
@@ -8,19 +9,19 @@ export type LinkView = { linkId: number; label: string; otherId: number };
 export function linksForTask(
   links: TaskLink[],
   linkTypes: Map<number, LinkType>,
-  taskId: number,
+  logicalId: number,
 ): LinkView[] {
   const out: LinkView[] = [];
   for (const l of links) {
     const t = linkTypes.get(l.typeId);
     if (!t) continue;
-    if (l.fromId === taskId) {
-      out.push({ linkId: l.id, label: t.name, otherId: l.toId });
-    } else if (l.toId === taskId) {
+    if (l.fromLogicalId === logicalId) {
+      out.push({ linkId: l.id, label: t.name, otherId: l.toLogicalId });
+    } else if (l.toLogicalId === logicalId) {
       out.push({
         linkId: l.id,
         label: t.directed ? t.reverseName : t.name,
-        otherId: l.fromId,
+        otherId: l.fromLogicalId,
       });
     }
   }
@@ -43,8 +44,9 @@ export function groupLinks(views: LinkView[]): { label: string; items: LinkView[
 }
 
 // Число связей задачи (для бейджа в дереве).
-export function linkCount(links: TaskLink[], taskId: number): number {
+export function linkCount(links: TaskLink[], logicalId: number): number {
   let n = 0;
-  for (const l of links) if (l.fromId === taskId || l.toId === taskId) n++;
+  for (const l of links)
+    if (l.fromLogicalId === logicalId || l.toLogicalId === logicalId) n++;
   return n;
 }

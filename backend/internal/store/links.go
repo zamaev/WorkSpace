@@ -25,13 +25,14 @@ type LinkType struct {
 	UpdatedAt   string
 }
 
-// TaskLink — связь from→to через тип.
+// TaskLink — связь from→to между ЛОГИЧЕСКИМИ задачами через тип: у серии
+// повторов связь видна на всех вхождениях и переживает спавн следующего.
 type TaskLink struct {
-	ID        int64
-	FromID    int64
-	ToID      int64
-	TypeID    int64
-	CreatedAt string
+	ID          int64
+	FromLogical int64
+	ToLogical   int64
+	TypeID      int64
+	CreatedAt   string
 }
 
 // ── типы связей ──
@@ -153,14 +154,15 @@ func scanLinkTypes(rows *sql.Rows) ([]LinkType, error) {
 
 // ── связи задач ──
 
-// ListTaskLinks — все связи, где обе задачи и тип живы.
+// ListTaskLinks — все связи, где жив тип и есть хотя бы одно живое вхождение
+// каждой из логических задач-концов (soft-delete всей серии скрывает связь).
 func ListTaskLinks(db *sql.DB) ([]TaskLink, error) {
 	rows, err := db.Query(`
-		SELECT l.id, l.from_id, l.to_id, l.type_id, l.created_at
+		SELECT l.id, l.from_logical, l.to_logical, l.type_id, l.created_at
 		FROM task_links l
-		JOIN tasks a ON a.id = l.from_id AND a.deleted_at IS NULL
-		JOIN tasks b ON b.id = l.to_id AND b.deleted_at IS NULL
 		JOIN link_types t ON t.id = l.type_id AND t.deleted_at IS NULL
+		WHERE EXISTS (SELECT 1 FROM tasks a WHERE a.logical_id = l.from_logical AND a.deleted_at IS NULL)
+		  AND EXISTS (SELECT 1 FROM tasks b WHERE b.logical_id = l.to_logical AND b.deleted_at IS NULL)
 		ORDER BY l.id`)
 	if err != nil {
 		return nil, err
@@ -169,7 +171,7 @@ func ListTaskLinks(db *sql.DB) ([]TaskLink, error) {
 	var out []TaskLink
 	for rows.Next() {
 		var l TaskLink
-		if err := rows.Scan(&l.ID, &l.FromID, &l.ToID, &l.TypeID, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.FromLogical, &l.ToLogical, &l.TypeID, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
@@ -177,21 +179,36 @@ func ListTaskLinks(db *sql.DB) ([]TaskLink, error) {
 	return out, rows.Err()
 }
 
-func CreateTaskLink(db *sql.DB, fromID, toID, typeID int64) (TaskLink, error) {
-	if fromID == toID {
-		return TaskLink{}, ErrSelfLink
+// logicalOf резолвит физический id вхождения в логический якорь (живой).
+func logicalOf(q querier, taskID int64) (int64, error) {
+	var lid int64
+	err := q.QueryRow(`SELECT logical_id FROM tasks WHERE id = ? AND deleted_at IS NULL`, taskID).Scan(&lid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
 	}
+	return lid, err
+}
+
+// CreateTaskLink связывает ЛОГИЧЕСКИЕ задачи: принимает id любых живых
+// вхождений (физические строки) и резолвит их в logical_id. Связь двух
+// вхождений одной серии — само-связь (запрещена).
+func CreateTaskLink(db *sql.DB, fromID, toID, typeID int64) (TaskLink, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return TaskLink{}, err
 	}
 	defer tx.Rollback()
 
-	if err := mustExist(tx, fromID, ErrNotFound); err != nil {
+	fromLogical, err := logicalOf(tx, fromID)
+	if err != nil {
 		return TaskLink{}, err
 	}
-	if err := mustExist(tx, toID, ErrNotFound); err != nil {
+	toLogical, err := logicalOf(tx, toID)
+	if err != nil {
 		return TaskLink{}, err
+	}
+	if fromLogical == toLogical {
+		return TaskLink{}, ErrSelfLink
 	}
 	if _, err := loadLinkType(tx, typeID); err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -199,16 +216,16 @@ func CreateTaskLink(db *sql.DB, fromID, toID, typeID int64) (TaskLink, error) {
 		}
 		return TaskLink{}, err
 	}
-	// дубль той же связи (та же пара + тип, в ту же сторону) запрещён
+	// дубль той же связи (та же логическая пара + тип, в ту же сторону) запрещён
 	var n int
-	if err := tx.QueryRow(`SELECT count(*) FROM task_links WHERE from_id = ? AND to_id = ? AND type_id = ?`, fromID, toID, typeID).Scan(&n); err != nil {
+	if err := tx.QueryRow(`SELECT count(*) FROM task_links WHERE from_logical = ? AND to_logical = ? AND type_id = ?`, fromLogical, toLogical, typeID).Scan(&n); err != nil {
 		return TaskLink{}, err
 	}
 	if n > 0 {
 		return TaskLink{}, ErrDupLink
 	}
 	ts := now()
-	res, err := tx.Exec(`INSERT INTO task_links (from_id, to_id, type_id, created_at) VALUES (?, ?, ?, ?)`, fromID, toID, typeID, ts)
+	res, err := tx.Exec(`INSERT INTO task_links (from_logical, to_logical, type_id, created_at) VALUES (?, ?, ?, ?)`, fromLogical, toLogical, typeID, ts)
 	if err != nil {
 		return TaskLink{}, err
 	}
@@ -219,7 +236,7 @@ func CreateTaskLink(db *sql.DB, fromID, toID, typeID int64) (TaskLink, error) {
 	if err := tx.Commit(); err != nil {
 		return TaskLink{}, err
 	}
-	return TaskLink{ID: id, FromID: fromID, ToID: toID, TypeID: typeID, CreatedAt: ts}, nil
+	return TaskLink{ID: id, FromLogical: fromLogical, ToLogical: toLogical, TypeID: typeID, CreatedAt: ts}, nil
 }
 
 func DeleteTaskLink(db *sql.DB, id int64) error {

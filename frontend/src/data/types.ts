@@ -34,8 +34,9 @@ export type LinkType = {
 
 export type TaskLink = {
   id: number;
-  fromId: number;
-  toId: number;
+  // концы связи — ЛОГИЧЕСКИЕ задачи (у серии повторов одна на все вхождения)
+  fromLogicalId: number;
+  toLogicalId: number;
   typeId: number;
 };
 

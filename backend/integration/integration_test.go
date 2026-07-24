@@ -326,9 +326,9 @@ func TestTaskLinksFlow(t *testing.T) {
 	// список связей — одна
 	var tl struct {
 		TaskLinks []struct {
-			ID     int64 `json:"id"`
-			FromID int64 `json:"fromId"`
-			ToID   int64 `json:"toId"`
+			ID          int64 `json:"id"`
+			FromLogical int64 `json:"fromLogicalId"`
+			ToLogical   int64 `json:"toLogicalId"`
 		} `json:"taskLinks"`
 	}
 	if err := json.Unmarshal(e.must("GET", "/api/task-links", nil, 200), &tl); err != nil {

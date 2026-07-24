@@ -9,7 +9,7 @@ const types = new Map<number, LinkType>([
 
 describe("linksForTask", () => {
   it("направленный: from → прямая подпись, to → обратная", () => {
-    const links: TaskLink[] = [{ id: 10, fromId: 1, toId: 2, typeId: 1 }];
+    const links: TaskLink[] = [{ id: 10, fromLogicalId: 1, toLogicalId: 2, typeId: 1 }];
     expect(linksForTask(links, types, 1)).toEqual([
       { linkId: 10, label: "блокирует", otherId: 2 },
     ]);
@@ -18,12 +18,12 @@ describe("linksForTask", () => {
     ]);
   });
   it("ненаправленный: обе стороны — одна подпись", () => {
-    const links: TaskLink[] = [{ id: 11, fromId: 3, toId: 4, typeId: 2 }];
+    const links: TaskLink[] = [{ id: 11, fromLogicalId: 3, toLogicalId: 4, typeId: 2 }];
     expect(linksForTask(links, types, 3)[0]).toMatchObject({ label: "связана с", otherId: 4 });
     expect(linksForTask(links, types, 4)[0]).toMatchObject({ label: "связана с", otherId: 3 });
   });
   it("неизвестный тип пропускается", () => {
-    expect(linksForTask([{ id: 1, fromId: 1, toId: 2, typeId: 99 }], types, 1)).toEqual([]);
+    expect(linksForTask([{ id: 1, fromLogicalId: 1, toLogicalId: 2, typeId: 99 }], types, 1)).toEqual([]);
   });
 });
 
@@ -43,9 +43,9 @@ describe("groupLinks", () => {
 describe("linkCount", () => {
   it("считает связи с обеих сторон", () => {
     const links: TaskLink[] = [
-      { id: 1, fromId: 1, toId: 2, typeId: 1 },
-      { id: 2, fromId: 3, toId: 1, typeId: 2 },
-      { id: 3, fromId: 4, toId: 5, typeId: 1 },
+      { id: 1, fromLogicalId: 1, toLogicalId: 2, typeId: 1 },
+      { id: 2, fromLogicalId: 3, toLogicalId: 1, typeId: 2 },
+      { id: 3, fromLogicalId: 4, toLogicalId: 5, typeId: 1 },
     ];
     expect(linkCount(links, 1)).toBe(2);
     expect(linkCount(links, 5)).toBe(1);

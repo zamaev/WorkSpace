@@ -110,11 +110,11 @@ type linkTypeBody struct {
 }
 
 type taskLinkJSON struct {
-	ID        int64  `json:"id"`
-	FromID    int64  `json:"fromId"`
-	ToID      int64  `json:"toId"`
-	TypeID    int64  `json:"typeId"`
-	CreatedAt string `json:"createdAt"`
+	ID          int64  `json:"id"`
+	FromLogical int64  `json:"fromLogicalId"`
+	ToLogical   int64  `json:"toLogicalId"`
+	TypeID      int64  `json:"typeId"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 func toTaskLinkJSON(l store.TaskLink) taskLinkJSON {

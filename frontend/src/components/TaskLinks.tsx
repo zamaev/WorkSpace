@@ -17,12 +17,19 @@ export function TaskLinks({ task }: { task: Task }) {
   const addRef = useRef<HTMLButtonElement>(null);
   const [picking, setPicking] = useState(false);
 
-  const groups = groupLinks(linksForTask(taskLinks, linkTypes, task.id));
+  // связи логической задачи: у серии повторов видны на всех вхождениях
+  const groups = groupLinks(linksForTask(taskLinks, linkTypes, task.logicalId));
 
-  const goTo = (id: number) => {
-    const t = tasks.get(id);
+  // otherId — логическая задача; ведём к её последнему живому вхождению
+  const goTo = (logicalId: number) => {
+    let t: Task | undefined;
+    for (const x of tasks.values()) {
+      if (x.logicalId === logicalId && (!t || x.id > t.id)) t = x;
+    }
     if (!t) return;
-    navigate(`/projects/${t.projectId}?task=${id}`, { state: { focus: id } });
+    navigate(`/projects/${t.projectId}?task=${t.id}`, {
+      state: { focus: t.id },
+    });
   };
 
   return (
@@ -103,13 +110,20 @@ function LinkPicker({
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<Task | null>(null);
 
+  // серия повторов — одна логическая задача: показываем последнее вхождение,
+  // исключаем свою логическую (само-связь и любое вхождение той же серии)
   const q = query.trim().toLowerCase();
-  const matches =
-    q === ""
-      ? []
-      : [...tasks.values()]
-          .filter((t) => t.id !== task.id && t.title.toLowerCase().includes(q))
-          .slice(0, 12);
+  let matches: Task[] = [];
+  if (q !== "") {
+    const byLogical = new Map<number, Task>();
+    for (const t of tasks.values()) {
+      if (t.logicalId === task.logicalId || !t.title.toLowerCase().includes(q))
+        continue;
+      const cur = byLogical.get(t.logicalId);
+      if (!cur || t.id > cur.id) byLogical.set(t.logicalId, t);
+    }
+    matches = [...byLogical.values()].sort((a, b) => a.id - b.id).slice(0, 12);
+  }
 
   const types = [...linkTypes.values()].sort(
     (a, b) => a.position - b.position || a.id - b.id,

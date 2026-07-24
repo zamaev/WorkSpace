@@ -55,7 +55,7 @@ export function TreeNode({
   const planEnd = task.endOn ?? task.scheduledOn;
   const chipOverdue = planEnd !== null && !task.done && planEnd < today;
   const due = duePhase(task.softDueOn, task.dueOn, today);
-  const links = linkCount(taskLinks, task.id);
+  const links = linkCount(taskLinks, task.logicalId);
 
   useEffect(() => {
     if (flashId === task.id) {

@@ -302,16 +302,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         return next;
       });
-      setTaskLinks((prev) =>
-        prev.filter((l) => !doomed.has(l.fromId) && !doomed.has(l.toId)),
-      );
-      // привязка живёт на логической задаче: прячем только если после
+      // связи и привязки живут на логической задаче: прячем только если после
       // удаления не осталось ни одного живого вхождения с этим logicalId
-      // (удаление прошлого вхождения серии заметку скрывать не должно)
+      // (удаление прошлого вхождения серии связь/заметку скрывать не должно)
       const liveLogical = new Set(
         [...tasks.values()]
           .filter((t) => !doomed.has(t.id))
           .map((t) => t.logicalId),
+      );
+      setTaskLinks((prev) =>
+        prev.filter(
+          (l) =>
+            liveLogical.has(l.fromLogicalId) && liveLogical.has(l.toLogicalId),
+        ),
       );
       setTaskNotes((prev) => prev.filter((tn) => liveLogical.has(tn.logicalId)));
       try {

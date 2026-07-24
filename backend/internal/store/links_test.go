@@ -60,7 +60,8 @@ func TestTaskLinkCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if link.FromID != a.ID || link.ToID != b.ID {
+	// у разовых задач логический id = их id
+	if link.FromLogical != a.ID || link.ToLogical != b.ID {
 		t.Errorf("связь: %+v", link)
 	}
 	// самосвязь — 422
@@ -95,6 +96,58 @@ func TestTaskLinkCRUD(t *testing.T) {
 	}
 	if all, _ := ListTaskLinks(e.db); len(all) != 1 {
 		t.Errorf("после удаления связей %d, ждал 1", len(all))
+	}
+}
+
+// Связь на логической задаче переживает спавн следующего вхождения серии.
+func TestTaskLinkSurvivesSeriesSpawn(t *testing.T) {
+	e := openTest(t)
+	other := e.mk(t, "проект", nil, nil)
+	m := e.mk(t, "планёрка", nil, new("2030-01-07"))
+	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
+		t.Fatal(err)
+	}
+	lts, _ := ListLinkTypes(e.db)
+	if _, err := CreateTaskLink(e.db, m.ID, other.ID, lts[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	// ✓ → спавн
+	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spawned *Task
+	for i := range out {
+		if out[i].ID != m.ID && out[i].Title == "планёрка" {
+			spawned = &out[i]
+		}
+	}
+	if spawned == nil {
+		t.Fatal("спавна не было")
+	}
+	// связь одна, на логическом якоре — новое вхождение её видит
+	all, _ := ListTaskLinks(e.db)
+	if len(all) != 1 || all[0].FromLogical != spawned.LogicalID {
+		t.Fatalf("связь после спавна: %+v (logical спавна %d)", all, spawned.LogicalID)
+	}
+	// дубль через новое вхождение — по логической паре
+	if _, err := CreateTaskLink(e.db, spawned.ID, other.ID, lts[0].ID); !errors.Is(err, ErrDupLink) {
+		t.Errorf("дубль через другое вхождение: %v", err)
+	}
+	// связь двух вхождений ОДНОЙ серии — само-связь
+	m2 := e.mk(t, "план2", nil, new("2030-02-07"))
+	if _, err := UpdateTask(e.db, m2.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
+		t.Fatal(err)
+	}
+	out2, _ := UpdateTask(e.db, m2.ID, UpdateReq{Done: new(true)})
+	var sp2 *Task
+	for i := range out2 {
+		if out2[i].ID != m2.ID && out2[i].Title == "план2" {
+			sp2 = &out2[i]
+		}
+	}
+	if _, err := CreateTaskLink(e.db, m2.ID, sp2.ID, lts[0].ID); !errors.Is(err, ErrSelfLink) {
+		t.Errorf("связь вхождений одной серии должна быть само-связью: %v", err)
 	}
 }
 
