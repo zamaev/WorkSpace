@@ -1,9 +1,9 @@
 import { type ReactNode } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { render } from "@testing-library/react";
 import { vi } from "vitest";
 import { DataProvider } from "../data/DataProvider";
-import type { Project, Task } from "../data/types";
+import type { Note, Project, Task, TaskNote } from "../data/types";
 
 // jsdom не умеет scrollIntoView
 Element.prototype.scrollIntoView = () => {};
@@ -63,14 +63,34 @@ export function demoTask(p: Partial<Task> = {}): Task {
   };
 }
 
+export function demoNote(p: Partial<Note> = {}): Note {
+  return {
+    id: nextId++,
+    parentId: null,
+    title: `заметка ${nextId}`,
+    body: "",
+    position: 0,
+    ...p,
+  };
+}
+
 export type FetchLogEntry = { method: string; path: string; body: unknown };
 
 // In-memory API: отдаёт переданные данные, пишет мутации в лог.
 // PATCH задач отвечает текущей версией с применёнными полями — этого
-// достаточно, чтобы DataProvider смёржил ответ без ошибок.
-export function stubApi(tasks: Task[], projects: Project[]) {
+// достаточно, чтобы DataProvider смёржил ответ без ошибок. Привязки
+// заметка↔задача поддерживают create/delete, чтобы тестировать UI связей.
+export function stubApi(
+  tasks: Task[],
+  projects: Project[],
+  extra: { notes?: Note[]; taskNotes?: TaskNote[] } = {},
+) {
   const log: FetchLogEntry[] = [];
   const byId = new Map(tasks.map((t) => [t.id, t]));
+  const notes = extra.notes ?? [];
+  let taskNotes = extra.taskNotes ?? [];
+  let nextTaskNoteId =
+    taskNotes.reduce((m, tn) => Math.max(m, tn.id), 0) + 1;
   vi.stubGlobal("fetch", async (path: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     const body = init?.body ? JSON.parse(init.body as string) : undefined;
@@ -87,6 +107,19 @@ export function stubApi(tasks: Task[], projects: Project[]) {
       if (path === "/api/people") return json({ people: [] });
       if (path === "/api/roles") return json({ roles: [] });
       if (path === "/api/members") return json({ members: [] });
+      if (path === "/api/notes") return json({ notes });
+      if (path === "/api/task-notes") return json({ taskNotes });
+    }
+    if (path === "/api/task-notes" && method === "POST") {
+      const b = body as { taskId: number; noteId: number };
+      const tn = { id: nextTaskNoteId++, taskId: b.taskId, noteId: b.noteId };
+      taskNotes = [...taskNotes, tn];
+      return json({ taskNote: tn });
+    }
+    const tnDel = path.match(/^\/api\/task-notes\/(\d+)$/);
+    if (tnDel && method === "DELETE") {
+      taskNotes = taskNotes.filter((tn) => tn.id !== Number(tnDel[1]));
+      return json({ ok: true });
     }
     const m = path.match(/^\/api\/tasks\/(\d+)$/);
     if (m && method === "PATCH") {
@@ -100,13 +133,32 @@ export function stubApi(tasks: Task[], projects: Project[]) {
   return log;
 }
 
-export function renderAt(path: string, routePath: string, ui: ReactNode) {
+// Пишет текущий location в переданный объект — для проверок навигации.
+// Рендерится вне Routes, поэтому живёт и после ухода на несматченный путь.
+export function LocationProbe({
+  into,
+}: {
+  into: { path: string; search: string };
+}) {
+  const loc = useLocation();
+  into.path = loc.pathname;
+  into.search = loc.search;
+  return null;
+}
+
+export function renderAt(
+  path: string,
+  routePath: string,
+  ui: ReactNode,
+  outside?: ReactNode,
+) {
   return render(
     <DataProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path={routePath} element={ui} />
         </Routes>
+        {outside}
       </MemoryRouter>
     </DataProvider>,
   );

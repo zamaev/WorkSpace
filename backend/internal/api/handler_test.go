@@ -262,3 +262,80 @@ func TestErrors(t *testing.T) {
 		t.Errorf("цикл: %d", code)
 	}
 }
+
+// Полный HTTP-цикл привязок заметка↔задача: create/дубль(422)/несущ.(404),
+// список, скрытие после удаления задачи, снятие связи.
+func TestTaskNotesOverHTTP(t *testing.T) {
+	srv := testServer(t)
+	pid := mkProject(t, srv, "Работа")
+
+	code, res := call(t, "POST", srv.URL+"/api/tasks", map[string]any{"title": "Задача", "projectId": pid})
+	if code != 201 {
+		t.Fatalf("POST task: %d %s", code, res["error"])
+	}
+	var task struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(res["task"], &task)
+
+	code, res = call(t, "POST", srv.URL+"/api/notes", map[string]any{"title": "Заметка"})
+	if code != 201 {
+		t.Fatalf("POST note: %d %s", code, res["error"])
+	}
+	var note struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(res["note"], &note)
+
+	// привязать
+	code, res = call(t, "POST", srv.URL+"/api/task-notes", map[string]any{"taskId": task.ID, "noteId": note.ID})
+	if code != 201 {
+		t.Fatalf("POST task-note: %d %s", code, res["error"])
+	}
+	var tn struct {
+		ID     int64 `json:"id"`
+		TaskID int64 `json:"taskId"`
+		NoteID int64 `json:"noteId"`
+	}
+	json.Unmarshal(res["taskNote"], &tn)
+	if tn.TaskID != task.ID || tn.NoteID != note.ID {
+		t.Errorf("тело привязки: %+v", tn)
+	}
+
+	// дубль пары → 422, несуществующая заметка → 404
+	if code, _ := call(t, "POST", srv.URL+"/api/task-notes", map[string]any{"taskId": task.ID, "noteId": note.ID}); code != 422 {
+		t.Errorf("дубль: %d", code)
+	}
+	if code, _ := call(t, "POST", srv.URL+"/api/task-notes", map[string]any{"taskId": task.ID, "noteId": int64(9999)}); code != 404 {
+		t.Errorf("несущ. заметка: %d", code)
+	}
+
+	// список — одна привязка
+	code, res = call(t, "GET", srv.URL+"/api/task-notes", nil)
+	var list []struct {
+		ID int64 `json:"id"`
+	}
+	json.Unmarshal(res["taskNotes"], &list)
+	if code != 200 || len(list) != 1 {
+		t.Fatalf("GET: %d, привязок %d", code, len(list))
+	}
+
+	// удаление задачи скрывает связь из списка
+	if code, _ := call(t, "DELETE", fmt.Sprintf("%s/api/tasks/%d", srv.URL, task.ID), nil); code != 200 {
+		t.Fatalf("DELETE task: %d", code)
+	}
+	code, res = call(t, "GET", srv.URL+"/api/task-notes", nil)
+	list = nil
+	json.Unmarshal(res["taskNotes"], &list)
+	if code != 200 || len(list) != 0 {
+		t.Errorf("после удаления задачи: %d, привязок %d", code, len(list))
+	}
+
+	// снять связь; повторно → 404
+	if code, _ := call(t, "DELETE", fmt.Sprintf("%s/api/task-notes/%d", srv.URL, tn.ID), nil); code != 200 {
+		t.Errorf("DELETE link: %d", code)
+	}
+	if code, _ := call(t, "DELETE", fmt.Sprintf("%s/api/task-notes/%d", srv.URL, tn.ID), nil); code != 404 {
+		t.Errorf("повторный DELETE: %d", code)
+	}
+}
