@@ -19,6 +19,7 @@ import { looksLikeHtml, markdownToHtml } from "./migrate";
 const NOTE_MIME = "application/x-workspace-note";
 const CLOSED_KEY = "workspace-notes-closed";
 const NOTES_W_KEY = "workspace-col-notes";
+const EDITOR_W_KEY = "workspace-col-note-editor";
 
 function loadClosed(): Set<number> {
   try {
@@ -54,6 +55,9 @@ export function NotesView() {
   const selectedId = id ? Number(id) : null;
 
   const [sideW, setSideW] = useState(() => readWidth(NOTES_W_KEY, 280, 200, 480));
+  const [editorW, setEditorW] = useState(() =>
+    readWidth(EDITOR_W_KEY, 812, 560, 1200),
+  );
   const [query, setQuery] = useState("");
 
   // разовая миграция markdown → HTML для заметок, созданных до перехода
@@ -162,7 +166,22 @@ export function NotesView() {
       />
 
       {selected && !needsMigration ? (
-        <NoteEditor key={selected.id} note={selected} />
+        <NoteEditor
+          key={selected.id}
+          note={selected}
+          width={editorW}
+          onResizeDelta={(dx) =>
+            setEditorW((w) => {
+              const nw = Math.min(1200, Math.max(560, w + dx));
+              try {
+                localStorage.setItem(EDITOR_W_KEY, String(nw));
+              } catch {
+                // приватный режим — ширина живёт до перезагрузки
+              }
+              return nw;
+            })
+          }
+        />
       ) : (
         <div className="notes-editor panel flex items-center justify-center">
           <p className="text-[13px] text-dim m-0">

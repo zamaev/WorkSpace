@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
+import { ColResize } from "../components/ColResize";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -23,7 +24,15 @@ type TocItem = { level: number; text: string; index: number };
 // HTML миграцией в NotesView. Горячие клавиши (⌘B/⌘I/…), markdown-
 // подсказки на лету (# , **, - , > ), вставка URL поверх выделения →
 // ссылка — из коробки StarterKit + Link.
-export function NoteEditor({ note }: { note: Note }) {
+export function NoteEditor({
+  note,
+  width,
+  onResizeDelta,
+}: {
+  note: Note;
+  width: number;
+  onResizeDelta: (dx: number) => void;
+}) {
   const { patchNote, notes } = useData();
   const navigate = useNavigate();
   const [title, setTitle] = useState(note.title);
@@ -136,7 +145,10 @@ export function NoteEditor({ note }: { note: Note }) {
   };
 
   return (
-    <div className="note-editor-wide">
+    <div
+      className="note-editor-wide"
+      style={{ ["--editor-w"]: `${width}px` } as CSSProperties}
+    >
       <div className="notes-editor panel px-6 py-5">
       <div className="note-doc">
       {path.length > 0 && (
@@ -209,6 +221,7 @@ export function NoteEditor({ note }: { note: Note }) {
       />
       </div>
       </div>
+      <ColResize onDelta={onResizeDelta} />
       {toc.length > 1 && (
         <nav className="note-toc" aria-label="Оглавление">
           <div className="mlabel pb-1.5">Оглавление</div>
