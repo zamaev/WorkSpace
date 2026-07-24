@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import {
-  Navigate,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArchiveIcon, MLabel, SBar, SDot, TrashIcon } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import {
@@ -17,6 +12,7 @@ import { PALETTE, nextColor, type Project } from "../data/types";
 import { getDragTask, hasDragTask, setDragGhost } from "./dnd";
 import { ColResize, readWidth } from "../components/ColResize";
 import { TWO_WEEKS_KEY, WEEKENDS_KEY, readPref } from "../lib/prefs";
+import { useTaskParam } from "../lib/useTaskParam";
 import {
   addDays,
   dayDiff,
@@ -141,26 +137,11 @@ function DragWeekStrip() {
 export function ProjectsView() {
   const { pid } = useParams();
   const { projects, tasks, loading, offline, retry } = useData();
-  // выбранная задача живёт в URL (?task=<id>): адрес отражает открытую
-  // задачу — работают deep-link, кнопки браузера назад/вперёд и возврат из
-  // заметки. Меняется только query, роут /projects/:pid не пересобирается,
-  // поэтому состояние дерева (раскрытия, скролл) сохраняется. Правим через
-  // replace: выбор задачи — состояние вида, а не отдельная запись истории.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const taskParam = searchParams.get("task");
-  const selected = taskParam ? Number(taskParam) : null;
+  // выбранная задача — в URL (?task, см. useTaskParam). Меняется только
+  // query, роут /projects/:pid не пересобирается, поэтому состояние дерева
+  // (раскрытия, скролл) сохраняется.
+  const [selected, setSelected] = useTaskParam();
   const [focusDescNonce, setFocusDescNonce] = useState(0);
-  const setSelected = (id: number | null) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (id === null) next.delete("task");
-        else next.set("task", String(id));
-        return next;
-      },
-      { replace: true },
-    );
-  };
   const onCreateTask = (id: number) => {
     setSelected(id);
     setFocusDescNonce((n) => n + 1);

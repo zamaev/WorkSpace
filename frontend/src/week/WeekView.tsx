@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTaskParam } from "../lib/useTaskParam";
 import { MLabel, SDot } from "../components/ui";
 import { useData } from "../data/DataProvider";
 import {
@@ -121,7 +122,8 @@ export function WeekView() {
       return !v;
     });
   };
-  const [modalTask, setModalTask] = useState<number | null>(null);
+  // открытая в модалке задача — в URL (?task): deep-link и «назад» из заметки
+  const [modalTask, setModalTask] = useTaskParam();
   const { matches, bar: filterBar } = useTaskFilters();
   const [twoWeeks, setTwoWeeks] = useState(() => {
     try {
@@ -376,7 +378,7 @@ export function WeekView() {
           ))}
         </div>
       )}
-      {modalTask !== null && (
+      {modalTask !== null && tasks.has(modalTask) && (
         <TaskModal
           taskId={modalTask}
           showCrumb
