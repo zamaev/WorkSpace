@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../data/DataProvider";
+import type { Task } from "../data/types";
 import { AnchoredPopover } from "../components/AnchoredPopover";
+import { ConfirmButton } from "../components/ConfirmButton";
 
 // Строка «Задачи» в заметке: прикреплённые задачи чипами + пикер «＋ задача».
-// Клик по чипу ведёт к задаче — ?task открывает её в инспекторе; раскрытие
-// пути и подсветку в дереве шлём разовым сигналом в navigation state.
+// Привязка живёт на ЛОГИЧЕСКОЙ задаче: чип представляет всю серию повторов —
+// показываем последнее живое вхождение, клик ведёт к нему. ?task открывает
+// инспектор; раскрытие пути и подсветку шлём сигналом в navigation state.
 export function NoteTasks({ noteId }: { noteId: number }) {
   const { tasks, taskNotes, createTaskNote, removeTaskNote } = useData();
   const navigate = useNavigate();
@@ -14,11 +17,20 @@ export function NoteTasks({ noteId }: { noteId: number }) {
 
   const linked = taskNotes.filter((tn) => tn.noteId === noteId);
 
-  const goTo = (taskId: number) => {
-    const t = tasks.get(taskId);
-    if (!t) return;
-    navigate(`/projects/${t.projectId}?task=${taskId}`, {
-      state: { focus: taskId },
+  // представитель логической задачи — последнее созданное живое вхождение
+  const representative = (logicalId: number) => {
+    let best: Task | undefined;
+    for (const t of tasks.values()) {
+      if (t.logicalId === logicalId && (!best || t.id > best.id)) best = t;
+    }
+    return best;
+  };
+  const isSeries = (logicalId: number) =>
+    [...tasks.values()].filter((t) => t.logicalId === logicalId).length > 1;
+
+  const goTo = (t: Task) => {
+    navigate(`/projects/${t.projectId}?task=${t.id}`, {
+      state: { focus: t.id },
     });
   };
 
@@ -26,25 +38,30 @@ export function NoteTasks({ noteId }: { noteId: number }) {
     <div className="note-tasks">
       <span className="mmeta flex-none">Задачи</span>
       {linked.map((tn) => {
-        const t = tasks.get(tn.taskId);
+        const t = representative(tn.logicalId);
         return (
           <span key={tn.id} className="note-task-chip">
             <button
               type="button"
               className="min-w-0 truncate"
               title="Перейти к задаче"
-              onClick={() => goTo(tn.taskId)}
+              onClick={() => t && goTo(t)}
             >
               {t?.title?.trim() || "—"}
             </button>
-            <button
-              type="button"
+            <ConfirmButton
               className="note-task-chip-x"
               title="Открепить"
-              onClick={() => void removeTaskNote(tn.id)}
+              message={
+                isSeries(tn.logicalId)
+                  ? "Открепить заметку от всей серии повторов?"
+                  : "Открепить задачу от заметки?"
+              }
+              confirmLabel="Открепить"
+              onConfirm={() => void removeTaskNote(tn.id)}
             >
               ✕
-            </button>
+            </ConfirmButton>
           </span>
         );
       })}
@@ -59,7 +76,7 @@ export function NoteTasks({ noteId }: { noteId: number }) {
       {picking && (
         <AnchoredPopover anchorRef={addRef} onClose={() => setPicking(false)}>
           <TaskPicker
-            existing={new Set(linked.map((tn) => tn.taskId))}
+            existing={new Set(linked.map((tn) => tn.logicalId))}
             onPick={async (taskId) => {
               await createTaskNote(taskId, noteId);
               setPicking(false);
@@ -81,12 +98,19 @@ function TaskPicker({
   const { tasks } = useData();
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const matches =
-    q === ""
-      ? []
-      : [...tasks.values()]
-          .filter((t) => !existing.has(t.id) && t.title.toLowerCase().includes(q))
-          .slice(0, 12);
+  // серия повторов — одна логическая задача: в результатах только её
+  // последнее созданное вхождение, прошлые done-копии не засоряют поиск
+  let matches: Task[] = [];
+  if (q !== "") {
+    const byLogical = new Map<number, Task>();
+    for (const t of tasks.values()) {
+      if (existing.has(t.logicalId) || !t.title.toLowerCase().includes(q))
+        continue;
+      const cur = byLogical.get(t.logicalId);
+      if (!cur || t.id > cur.id) byLogical.set(t.logicalId, t);
+    }
+    matches = [...byLogical.values()].sort((a, b) => a.id - b.id).slice(0, 12);
+  }
 
   return (
     <div className="w-[240px]">

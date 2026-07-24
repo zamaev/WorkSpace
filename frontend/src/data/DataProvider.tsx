@@ -116,7 +116,7 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
     position,
     dayPosition,
     repeat,
-    seriesId,
+    logicalId,
   } = t;
   return {
     id,
@@ -134,7 +134,7 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
     position,
     dayPosition,
     repeat: repeat ?? null,
-    seriesId: seriesId ?? null,
+    logicalId,
   };
 }
 
@@ -305,7 +305,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setTaskLinks((prev) =>
         prev.filter((l) => !doomed.has(l.fromId) && !doomed.has(l.toId)),
       );
-      setTaskNotes((prev) => prev.filter((tn) => !doomed.has(tn.taskId)));
+      // привязка живёт на логической задаче: прячем только если после
+      // удаления не осталось ни одного живого вхождения с этим logicalId
+      // (удаление прошлого вхождения серии заметку скрывать не должно)
+      const liveLogical = new Set(
+        [...tasks.values()]
+          .filter((t) => !doomed.has(t.id))
+          .map((t) => t.logicalId),
+      );
+      setTaskNotes((prev) => prev.filter((tn) => liveLogical.has(tn.logicalId)));
       try {
         await api.deleteTask(id);
       } catch (e) {

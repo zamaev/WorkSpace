@@ -3,8 +3,8 @@ import { ganttTaskRows, hasDate } from "./rows";
 import type { Task } from "../data/types";
 
 function task(p: Partial<Task>): Task {
+  const id = p.id ?? 1;
   return {
-    id: 1,
     parentId: null,
     projectId: 1,
     title: "t",
@@ -19,8 +19,10 @@ function task(p: Partial<Task>): Task {
     position: 0,
     dayPosition: null,
     repeat: null,
-    seriesId: null,
     ...p,
+    id,
+    // logicalId обязателен: по умолчанию своя логическая задача (= id)
+    logicalId: p.logicalId ?? id,
   };
 }
 

@@ -41,7 +41,8 @@ export type TaskLink = {
 
 export type TaskNote = {
   id: number;
-  taskId: number;
+  // привязка живёт на логической задаче: у серии видна на всех вхождениях
+  logicalId: number;
   noteId: number;
 };
 
@@ -84,7 +85,8 @@ export type Task = {
   position: number;
   dayPosition: number | null;
   repeat: RepeatRule | null;
-  seriesId: number | null;
+  // id логической задачи: у разовой — свой id, у серии повторов общий
+  logicalId: number;
 };
 
 // Частичное обновление; null значим для scheduledOn (снять дату)
