@@ -293,12 +293,13 @@ func TestTaskNotesOverHTTP(t *testing.T) {
 		t.Fatalf("POST task-note: %d %s", code, res["error"])
 	}
 	var tn struct {
-		ID     int64 `json:"id"`
-		TaskID int64 `json:"taskId"`
-		NoteID int64 `json:"noteId"`
+		ID        int64 `json:"id"`
+		LogicalID int64 `json:"logicalId"`
+		NoteID    int64 `json:"noteId"`
 	}
 	json.Unmarshal(res["taskNote"], &tn)
-	if tn.TaskID != task.ID || tn.NoteID != note.ID {
+	// привязка живёт на логическом id (у разовой задачи = её id)
+	if tn.LogicalID != task.ID || tn.NoteID != note.ID {
 		t.Errorf("тело привязки: %+v", tn)
 	}
 

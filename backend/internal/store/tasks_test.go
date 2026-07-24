@@ -1056,7 +1056,7 @@ func TestRepeatDoneSpawnSkipsOccupiedDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := e.mk(t, "планёрка (дубль)", nil, new("2030-01-09"))
-	if _, err := e.db.Exec(`UPDATE tasks SET series_id = ? WHERE id = ?`, m.ID, other.ID); err != nil {
+	if _, err := e.db.Exec(`UPDATE tasks SET logical_id = ? WHERE id = ?`, m.ID, other.ID); err != nil {
 		t.Fatal(err)
 	}
 	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
@@ -1155,16 +1155,17 @@ func TestSoftDeleteProjectAndRefs(t *testing.T) {
 	}
 }
 
-func TestSeriesID(t *testing.T) {
+func TestLogicalID(t *testing.T) {
 	e := openTest(t)
+	// у только что созданной задачи logical_id = свой id
 	m := e.mk(t, "синк", nil, new("2030-01-07"))
+	if nm := e.get(t, m.ID); nm.LogicalID != m.ID {
+		t.Fatalf("logical_id новой задачи: %d, ждал %d", nm.LogicalID, m.ID)
+	}
 	if _, err := UpdateTask(e.db, m.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1, 4)}); err != nil {
 		t.Fatal(err)
 	}
-	if nm := e.get(t, m.ID); nm.SeriesID == nil || *nm.SeriesID != m.ID {
-		t.Fatalf("якорь серии: %v", nm.SeriesID)
-	}
-	// done-спавн наследует series_id
+	// done-спавн наследует logical_id
 	out, err := UpdateTask(e.db, m.ID, UpdateReq{Done: new(true)})
 	if err != nil {
 		t.Fatal(err)
@@ -1175,22 +1176,39 @@ func TestSeriesID(t *testing.T) {
 			spawned = &out[i]
 		}
 	}
-	if spawned == nil || spawned.SeriesID == nil || *spawned.SeriesID != m.ID {
-		t.Fatalf("спавн без якоря: %+v", spawned)
+	if spawned == nil || spawned.LogicalID != m.ID {
+		t.Fatalf("спавн без логического якоря: %+v", spawned)
 	}
-	// перенос спавненной: серия и правило остаются при ней, спавна нет
+	// перенос спавненной: логический якорь и правило остаются, спавна нет
 	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetScheduledOn: true, ScheduledOn: new("2030-01-11")}); err != nil {
 		t.Fatal(err)
 	}
-	if ns := e.get(t, spawned.ID); ns.SeriesID == nil || *ns.SeriesID != m.ID || ns.Repeat == nil {
+	if ns := e.get(t, spawned.ID); ns.LogicalID != m.ID || ns.Repeat == nil {
 		t.Errorf("после переноса: %+v", ns)
 	}
 	// снятие правила якорь не трогает
 	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetRepeat: true}); err != nil {
 		t.Fatal(err)
 	}
-	if ns := e.get(t, spawned.ID); ns.SeriesID == nil {
+	if ns := e.get(t, spawned.ID); ns.LogicalID != m.ID {
 		t.Error("якорь пропал после снятия правила")
+	}
+	// подзадачи спавна — самостоятельные логические задачи (logical = свой id)
+	if _, err := UpdateTask(e.db, spawned.ID, UpdateReq{SetRepeat: true, Repeat: repeatPtr(1)}); err != nil {
+		t.Fatal(err)
+	}
+	child := e.mk(t, "подзадача", &spawned.ID, nil)
+	if child.LogicalID != child.ID {
+		t.Fatalf("logical_id подзадачи: %d", child.LogicalID)
+	}
+	out2, err := UpdateTask(e.db, spawned.ID, UpdateReq{Done: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range out2 {
+		if x.Title == "подзадача" && x.ID != child.ID && x.LogicalID != x.ID {
+			t.Errorf("копия подзадачи делит logical_id с оригиналом: %+v", x)
+		}
 	}
 }
 

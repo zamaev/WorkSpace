@@ -28,7 +28,7 @@ type taskJSON struct {
 	Position    int         `json:"position"`
 	DayPosition *int        `json:"dayPosition"`
 	Repeat      *repeatJSON `json:"repeat"`
-	SeriesID    *int64      `json:"seriesId"`
+	LogicalID   int64       `json:"logicalId"`
 	CreatedAt   string      `json:"createdAt"`
 	UpdatedAt   string      `json:"updatedAt"`
 }
@@ -135,7 +135,7 @@ func toJSON(t store.Task) taskJSON {
 		Title: t.Title, Description: t.Description, Done: t.Done,
 		ScheduledOn: t.ScheduledOn, EndOn: t.EndOn, SoftDueOn: t.SoftDueOn, DueOn: t.DueOn,
 		TypeID: t.TypeID, AssigneeID: t.AssigneeID,
-		Position: t.Position, DayPosition: t.DayPosition, SeriesID: t.SeriesID,
+		Position: t.Position, DayPosition: t.DayPosition, LogicalID: t.LogicalID,
 		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 	// в БД правило хранится строкой JSON — наружу отдаём объектом
