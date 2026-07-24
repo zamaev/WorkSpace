@@ -4,8 +4,8 @@ import { useData } from "../data/DataProvider";
 import { AnchoredPopover } from "../components/AnchoredPopover";
 
 // Строка «Задачи» в заметке: прикреплённые задачи чипами + пикер «＋ задача».
-// Клик по чипу ведёт к задаче — ?task открывает её в инспекторе, ?focus
-// раскрывает путь и подсвечивает в дереве проектов.
+// Клик по чипу ведёт к задаче — ?task открывает её в инспекторе; раскрытие
+// пути и подсветку в дереве шлём разовым сигналом в navigation state.
 export function NoteTasks({ noteId }: { noteId: number }) {
   const { tasks, taskNotes, createTaskNote, removeTaskNote } = useData();
   const navigate = useNavigate();
@@ -17,7 +17,9 @@ export function NoteTasks({ noteId }: { noteId: number }) {
   const goTo = (taskId: number) => {
     const t = tasks.get(taskId);
     if (!t) return;
-    navigate(`/projects/${t.projectId}?task=${taskId}&focus=${taskId}`);
+    navigate(`/projects/${t.projectId}?task=${taskId}`, {
+      state: { focus: taskId },
+    });
   };
 
   return (

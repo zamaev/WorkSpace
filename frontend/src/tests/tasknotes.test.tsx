@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { useNavigate } from "react-router-dom";
 import { ProjectsView } from "../tree/ProjectsView";
 import { NoteTasks } from "../notes/NoteTasks";
 import { TaskNotes } from "../components/TaskNotes";
@@ -20,10 +15,7 @@ import {
   stubApi,
 } from "./helpers";
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
+afterEach(cleanup);
 
 describe("привязка заметок к задачам", () => {
   it("deep-link /projects/1?task=N открывает инспектор задачи", async () => {
@@ -71,12 +63,15 @@ describe("привязка заметок к задачам", () => {
     expect(screen.queryByTitle("Открепить заметку")).toBeNull();
   });
 
-  it("чип задачи в заметке ведёт к задаче (?task и ?focus)", async () => {
+  it("чип задачи в заметке ведёт к задаче (?task в URL, focus в state)", async () => {
     stubApi([demoTask({ id: 10, title: "цель" })], [demoProject()], {
       notes: [demoNote({ id: 5, title: "Личное" })],
       taskNotes: [{ id: 1, taskId: 10, noteId: 5 }],
     });
-    const probe = { path: "", search: "" };
+    const probe: { path: string; search: string; state?: unknown } = {
+      path: "",
+      search: "",
+    };
     renderAt(
       "/notes/5",
       "/notes/:id?",
@@ -86,7 +81,9 @@ describe("привязка заметок к задачам", () => {
     fireEvent.click(await screen.findByTitle("Перейти к задаче"));
     await waitFor(() => {
       expect(probe.path).toBe("/projects/1");
-      expect(probe.search).toBe("?task=10&focus=10");
+      // адрес чистый — focus не в URL, а разовым сигналом в navigation state
+      expect(probe.search).toBe("?task=10");
+      expect(probe.state).toEqual({ focus: 10 });
     });
   });
 
@@ -165,27 +162,54 @@ describe("чистка привязок при удалении", () => {
   });
 });
 
-describe("выбор задачи в URL", () => {
-  it("подсветка ?focus транзитна: снимается по таймеру, ?task остаётся", async () => {
+// Обёртка: навигация к задаче как из ссылки/палитры — ?task в URL, focus
+// разовым сигналом в navigation state (данные к этому моменту загружены).
+function FocusNavHarness() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          navigate("/projects/1?task=10", { state: { focus: 10 } })
+        }
+      >
+        go
+      </button>
+      <ProjectsView />
+    </>
+  );
+}
+
+describe("подсветка задачи в дереве (navigation state)", () => {
+  it("переход флешит задачу и снимает подсветку; адрес чистый (?task)", async () => {
     stubApi([demoTask({ id: 10, title: "цель" })], [demoProject()]);
-    const probe = { path: "", search: "" };
-    vi.useFakeTimers();
+    const probe: { path: string; search: string; state?: unknown } = {
+      path: "",
+      search: "",
+    };
     renderAt(
-      "/projects/1?task=10&focus=10",
+      "/projects/1",
       "/projects/:pid?",
-      <ProjectsView />,
+      <FocusNavHarness />,
       <LocationProbe into={probe} />,
     );
-    // загрузка данных и монтирование дерева
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100);
+    // дерево загрузилось
+    await screen.findByText("цель");
+    const row = () => screen.getByText("цель").closest(".tree-row");
+    expect(row()?.classList.contains("bg-asoft")).toBe(false);
+
+    fireEvent.click(screen.getByText("go"));
+    // адрес чистый (focus не в URL), задача подсвечена
+    await waitFor(() => {
+      expect(probe.search).toBe("?task=10");
+      expect(probe.state).toEqual({ focus: 10 });
+      expect(row()?.classList.contains("bg-asoft")).toBe(true);
     });
-    expect(probe.search).toContain("focus=10");
-    // спустя 2.2с подсветка снята, выбор задачи остался
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2300);
-    });
-    expect(probe.search).toBe("?task=10");
-    expect(probe.path).toBe("/projects/1");
+    // подсветка снимается по таймеру (~2.2с)
+    await waitFor(
+      () => expect(row()?.classList.contains("bg-asoft")).toBe(false),
+      { timeout: 2600 },
+    );
   });
 });

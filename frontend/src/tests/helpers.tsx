@@ -138,11 +138,12 @@ export function stubApi(
 export function LocationProbe({
   into,
 }: {
-  into: { path: string; search: string };
+  into: { path: string; search: string; state?: unknown };
 }) {
   const loc = useLocation();
   into.path = loc.pathname;
   into.search = loc.search;
+  into.state = loc.state;
   return null;
 }
 

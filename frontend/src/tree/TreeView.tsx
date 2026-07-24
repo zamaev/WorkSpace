@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useData } from "../data/DataProvider";
 import { childrenOf, rootTasks } from "../data/selectors";
 import type { Project, Task } from "../data/types";
@@ -47,8 +47,11 @@ export function TreeView({
   const memberIds = members.get(project.id) ?? [];
   // храним свёрнутые (а не раскрытые): новые узлы по умолчанию раскрыты
   const [closed, setClosed] = useState<Set<number>>(loadClosed);
-  const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const [flashId, setFlashId] = useState<number | null>(null);
+  // свежие задачи для focus-эффекта, чтобы не завязывать его на tasks (см. ниже)
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
 
   const isOpen = useCallback((id: number) => !closed.has(id), [closed]);
   const toggleOpen = useCallback((id: number) => {
@@ -65,40 +68,31 @@ export function TreeView({
     });
   }, []);
 
-  // переход к задаче из ссылок/палитры/заметки: раскрыть путь, подсветить,
-  // проскроллить. Сам выбор задачи делает ?task (его читает ProjectsView) —
-  // здесь только транзитная подсветка ?focus, снимаем её через 2.2с. Зависим
-  // от строкового значения focus, а не от объекта params: иначе setParams
-  // ниже перезапустит эффект и будет бесконечно сбрасывать таймер.
-  const focusParam = params.get("focus");
+  // переход к задаче из ссылок/палитры/заметки: раскрыть путь к ней,
+  // подсветить и проскроллить. Сам выбор задачи делает ?task (его читает
+  // ProjectsView); подсветка — разовый сигнал, приходит в navigation state
+  // (не в URL — адрес остаётся чистым /projects/:id?task=…). Реагируем ровно
+  // на смену навигации (location.key): focus и tasks читаем снапшотом на
+  // момент перехода, поэтому ре-рендеры не перезапускают эффект и не сбивают
+  // таймер снятия подсветки. state не переживает перезагрузку — но при deep-
+  // link флеш и не нужен, задачу и так открывает ?task.
   useEffect(() => {
-    if (!focusParam) return;
-    const id = Number(focusParam);
-    if (!tasks.has(id)) return;
+    const focus = (location.state as { focus?: number } | null)?.focus;
+    if (focus == null || !tasksRef.current.has(focus)) return;
     setClosed((prev) => {
       const next = new Set(prev);
-      let cur = tasks.get(id)?.parentId ?? null;
+      let cur = tasksRef.current.get(focus)?.parentId ?? null;
       while (cur !== null) {
         next.delete(cur);
-        cur = tasks.get(cur)?.parentId ?? null;
+        cur = tasksRef.current.get(cur)?.parentId ?? null;
       }
       return next;
     });
-    setFlashId(id);
-    const timer = setTimeout(() => {
-      setFlashId(null);
-      // снимаем только транзитный focus — выбор задачи (?task) остаётся в URL
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.delete("focus");
-          return next;
-        },
-        { replace: true },
-      );
-    }, 2200);
+    setFlashId(focus);
+    const timer = setTimeout(() => setFlashId(null), 2200);
     return () => clearTimeout(timer);
-  }, [focusParam, tasks, setParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только смена навигации
+  }, [location.key]);
 
   const roots = rootTasks(tasks, project.id).filter(
     (t) => !hideDone || !t.done,

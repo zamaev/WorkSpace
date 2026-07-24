@@ -513,7 +513,8 @@ export function TaskDetails({
             <TrashIcon /> Удалить
           </ConfirmButton>
           <Link
-            to={`/projects/${task.projectId}?task=${task.id}&focus=${task.id}`}
+            to={`/projects/${task.projectId}?task=${task.id}`}
+            state={{ focus: task.id }}
             className="mmeta !text-accent"
           >
             в дереве →

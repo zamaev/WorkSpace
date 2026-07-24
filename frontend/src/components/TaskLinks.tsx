@@ -8,7 +8,8 @@ import { MLabel } from "./ui";
 
 // Секция «Связи» в инспекторе задачи: списки связей по подписям + пикер
 // «＋ связать» (поиск задачи → выбор типа/направления). Клик по связанной
-// задаче открывает её в инспекторе (?task) и подсвечивает в дереве (?focus).
+// задаче открывает её в инспекторе (?task); подсветку в дереве шлём разовым
+// сигналом в navigation state (не в URL — адрес остаётся чистым).
 export function TaskLinks({ task }: { task: Task }) {
   const { tasks, linkTypes, taskLinks, createLink, removeLink } = useData();
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export function TaskLinks({ task }: { task: Task }) {
   const goTo = (id: number) => {
     const t = tasks.get(id);
     if (!t) return;
-    navigate(`/projects/${t.projectId}?task=${id}&focus=${id}`);
+    navigate(`/projects/${t.projectId}?task=${id}`, { state: { focus: id } });
   };
 
   return (
