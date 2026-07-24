@@ -1,62 +1,73 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { AnchoredPopover } from "./AnchoredPopover";
 
-// Подтверждение вторым кликом: первый клик «взводит» кнопку (краснеет,
-// текст меняется), второй — выполняет. Сброс — только по таймеру или
-// Escape: сброс по уходу мыши делал паттерн хрупким (реальная мышь между
-// кликами почти всегда чуть уходит с кнопки, и подтверждение тихо
-// слеталo — «задачи не удаляются»).
+// Удаление через попап-подтверждение: клик по кнопке открывает поповер с
+// вопросом и кнопками «Отмена / Удалить». Кнопка подтверждения появляется
+// НЕ на месте триггера (поповер снизу), поэтому привычный «двойной клик»
+// по корзине не удаляет случайно — второй клик по триггеру просто закрывает
+// поповер. onConfirm вызывается только по явному «Удалить».
 export function ConfirmButton({
   children,
-  confirmLabel = "точно?",
+  message,
+  confirmLabel = "Удалить",
   className = "",
-  armedClassName = "",
   title,
   onConfirm,
 }: {
   children: ReactNode;
+  message: ReactNode;
   confirmLabel?: ReactNode;
   className?: string;
-  armedClassName?: string;
   title?: string;
   onConfirm: () => void;
 }) {
-  const [armed, setArmed] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!armed) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setArmed(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [armed]);
-
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, []);
+  const ref = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
 
   return (
-    <button
-      type="button"
-      className={`${className} ${armed ? armedClassName : ""}`}
-      title={title}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!armed) {
-          setArmed(true);
-          if (timer.current) clearTimeout(timer.current);
-          timer.current = setTimeout(() => setArmed(false), 4000);
-          return;
-        }
-        if (timer.current) clearTimeout(timer.current);
-        setArmed(false);
-        onConfirm();
-      }}
-    >
-      {armed ? confirmLabel : children}
-    </button>
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className={className}
+        title={title}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        {children}
+      </button>
+      {open && (
+        <AnchoredPopover anchorRef={ref} onClose={() => setOpen(false)}>
+          <div className="confirm-pop">
+            <p className="confirm-pop-msg">{message}</p>
+            <div className="confirm-pop-actions">
+              <button
+                type="button"
+                className="seg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="seg confirm-danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                  onConfirm();
+                }}
+              >
+                {confirmLabel}
+              </button>
+            </div>
+          </div>
+        </AnchoredPopover>
+      )}
+    </>
   );
 }

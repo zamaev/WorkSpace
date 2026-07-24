@@ -80,8 +80,8 @@ export function TeamView() {
         <RolesPanel />
       </div>
       <p className="pt-3 text-[12px] text-dim">
-        Имя и роль — двойной клик; цвет — клик по кружку; удаление — корзина,
-        второй клик подтверждает.
+        Имя и роль — двойной клик; цвет — клик по кружку; удаление — корзина
+        с подтверждением.
       </p>
     </div>
   );
@@ -223,9 +223,8 @@ function RoleRow({
       {count > 0 && <span className="mmeta">{count}</span>}
       <ConfirmButton
         className="row-btn row-btn-danger"
-        armedClassName="!bg-over/15 !text-over"
-        confirmLabel="✓"
-        title="Удалить роль (у людей она снимется)"
+        title="Удалить роль"
+        message="Удалить роль? У людей с этой ролью она снимется."
         onConfirm={() => void removeRole(role.id)}
       >
         <TrashIcon />
@@ -443,9 +442,8 @@ function PersonRow({
       )}
       <ConfirmButton
         className="row-btn row-btn-danger"
-        armedClassName="!bg-over/15 !text-over"
-        confirmLabel="✓"
-        title="Удалить (его задачи останутся без исполнителя)"
+        title="Удалить человека"
+        message="Удалить человека? Его задачи останутся без исполнителя."
         onConfirm={() => void removePerson(person.id)}
       >
         <TrashIcon />

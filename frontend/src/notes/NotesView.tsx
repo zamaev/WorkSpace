@@ -359,12 +359,11 @@ function NoteNode({
           </button>
           <ConfirmButton
             className="row-btn row-btn-danger"
-            armedClassName="!bg-over/15 !text-over"
-            confirmLabel="✓"
-            title={
+            title="Удалить заметку"
+            message={
               kids.length > 0
-                ? "Удалить заметку с вложенными — второй клик"
-                : "Удалить — второй клик"
+                ? "Удалить заметку вместе с вложенными?"
+                : "Удалить заметку?"
             }
             onConfirm={() => {
               const wasSel =

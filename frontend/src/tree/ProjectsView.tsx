@@ -614,9 +614,8 @@ function SidebarNode({
           {isEmpty ? (
             <ConfirmButton
               className="row-btn row-btn-danger"
-              armedClassName="!bg-over/15 !text-over"
-              confirmLabel="✓"
-              title="Удалить проект (второй клик подтверждает)"
+              title="Удалить проект"
+              message="Удалить проект?"
               onConfirm={() => void removeProject(project.id)}
             >
               <TrashIcon />
@@ -733,9 +732,8 @@ function ArchivedRow({
         {!hasAnything && (
           <ConfirmButton
             className="row-btn row-btn-danger"
-            armedClassName="!bg-over/15 !text-over"
-            confirmLabel="✓"
-            title="Удалить (второй клик подтверждает)"
+            title="Удалить проект"
+            message="Удалить проект?"
             onConfirm={() => void removeProject(project.id)}
           >
             <TrashIcon />

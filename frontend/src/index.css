@@ -213,6 +213,31 @@
     border-color: transparent;
     font-weight: 600;
   }
+  /* попап подтверждения удаления (ConfirmButton) */
+  .confirm-pop {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 240px;
+  }
+  .confirm-pop-msg {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text);
+  }
+  .confirm-pop-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+  .confirm-danger {
+    border-color: var(--over);
+    color: var(--over);
+  }
+  .confirm-danger:hover {
+    background: color-mix(in srgb, var(--over) 12%, transparent);
+  }
 
   /* ── оболочка ── */
 

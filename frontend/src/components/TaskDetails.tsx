@@ -5,7 +5,6 @@ import { breadcrumb, subtreeIds } from "../data/selectors";
 import { fmtDayChip, todayISO } from "../lib/dates";
 import { dueChipClass, duePhase } from "../lib/due";
 import { DOW_SHORT, fmtRepeatDays } from "../lib/repeat";
-import { plural } from "../lib/plural";
 import {
   AvatarDot,
   CalendarIcon,
@@ -182,12 +181,11 @@ export function TaskDetails({
         {variant === "panel" ? (
           <ConfirmButton
             className="row-btn row-btn-danger"
-            armedClassName="!bg-over/15 !text-over"
-            confirmLabel="✓"
-            title={
+            title="Удалить задачу"
+            message={
               subtreeCount > 1
-                ? `Удалить с подзадачами (${subtreeCount}) — второй клик`
-                : "Удалить — второй клик"
+                ? `Удалить задачу вместе с подзадачами (всего ${subtreeCount})?`
+                : "Удалить задачу?"
             }
             onConfirm={() => {
               void remove(task.id);
@@ -499,11 +497,10 @@ export function TaskDetails({
         <div className="flex items-center justify-between pt-1">
           <ConfirmButton
             className="seg flex items-center gap-1.5"
-            armedClassName="!text-over !border-over"
-            confirmLabel={
+            message={
               subtreeCount > 1
-                ? `удалить ${plural(subtreeCount, ["задачу", "задачи", "задач"])}?`
-                : "точно удалить?"
+                ? `Удалить задачу вместе с подзадачами (всего ${subtreeCount})?`
+                : "Удалить задачу?"
             }
             onConfirm={() => {
               void remove(task.id);

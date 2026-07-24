@@ -223,9 +223,8 @@ function LinkTypeRow({ type }: { type: LinkType }) {
         ))}
       <ConfirmButton
         className="row-btn row-btn-danger"
-        armedClassName="!bg-over/15 !text-over"
-        confirmLabel="✓"
-        title="Удалить тип связи (связи этого типа исчезнут)"
+        title="Удалить тип связи"
+        message="Удалить тип связи? Связи этого типа исчезнут."
         onConfirm={() => void removeLinkType(type.id)}
       >
         <TrashIcon />
@@ -405,9 +404,8 @@ function TypeRow({
       )}
       <ConfirmButton
         className="row-btn row-btn-danger"
-        armedClassName="!bg-over/15 !text-over"
-        confirmLabel="✓"
-        title="Удалить тип (задачи останутся без типа)"
+        title="Удалить тип"
+        message="Удалить тип? Задачи останутся без типа."
         onConfirm={() => void removeType(type.id)}
       >
         <TrashIcon />
