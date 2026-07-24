@@ -24,7 +24,7 @@ type task struct {
 	ScheduledOn *string `json:"scheduledOn"`
 	SoftDueOn   *string `json:"softDueOn"`
 	DueOn       *string `json:"dueOn"`
-	SeriesID    *int64  `json:"seriesId"`
+	LogicalID   int64   `json:"logicalId"`
 	Repeat      *struct {
 		Kind string `json:"kind"`
 		Days []int  `json:"days"`
@@ -142,14 +142,14 @@ func TestSeriesLifecycle(t *testing.T) {
 	m := e.createTask(map[string]any{"title": "планёрка", "projectId": pid, "scheduledOn": "2030-01-07"})
 	e.patch(m.ID, map[string]any{"repeat": map[string]any{"kind": "weekly", "days": []int{1, 3}}}, 200)
 
-	// done: спавн на ср 09, правило и series_id переезжают
+	// done: спавн на ср 09, правило и logical_id переезжают
 	e.patch(m.ID, map[string]any{"done": true}, 200)
 	all := e.tasks()
 	if len(all) != 2 {
 		t.Fatalf("после done: %d задач, ждал 2", len(all))
 	}
 	spawned := onDate(all, "планёрка", "2030-01-09")
-	if len(spawned) != 1 || spawned[0].Repeat == nil || spawned[0].SeriesID == nil || *spawned[0].SeriesID != m.ID {
+	if len(spawned) != 1 || spawned[0].Repeat == nil || spawned[0].LogicalID != m.ID {
 		t.Fatalf("спавн после done: %+v", spawned)
 	}
 
@@ -162,7 +162,7 @@ func TestSeriesLifecycle(t *testing.T) {
 			t.Fatalf("после переноса на %s: %d задач, ждал 2", day, len(all))
 		}
 		live := onDate(all, "планёрка", day)
-		if len(live) != 1 || live[0].Repeat == nil || live[0].SeriesID == nil {
+		if len(live) != 1 || live[0].Repeat == nil || live[0].LogicalID != m.ID {
 			t.Fatalf("после переноса на %s: %+v", day, live)
 		}
 	}
@@ -326,9 +326,9 @@ func TestTaskLinksFlow(t *testing.T) {
 	// список связей — одна
 	var tl struct {
 		TaskLinks []struct {
-			ID     int64 `json:"id"`
-			FromID int64 `json:"fromId"`
-			ToID   int64 `json:"toId"`
+			ID          int64 `json:"id"`
+			FromLogical int64 `json:"fromLogicalId"`
+			ToLogical   int64 `json:"toLogicalId"`
 		} `json:"taskLinks"`
 	}
 	if err := json.Unmarshal(e.must("GET", "/api/task-links", nil, 200), &tl); err != nil {

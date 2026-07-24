@@ -44,8 +44,9 @@ export function DayColumn({
       matches(t) &&
       ghostOccurrences(t, day, day, today).length > 0 &&
       // день занят живым вхождением той же серии (разовый перенос) —
-      // призрак был бы дублем реальной карточки
-      !list.some((x) => x.seriesId !== null && x.seriesId === t.seriesId),
+      // призрак был бы дублем реальной карточки. Сама t не в list (её
+      // призрак — будущее, план на другом дне), но x.id !== t.id страхует
+      !list.some((x) => x.id !== t.id && x.logicalId === t.logicalId),
   );
   const spans = spanTasksOn(tasks, day).filter(
     (t) => isTaskVisible(projects, t) && matches(t),

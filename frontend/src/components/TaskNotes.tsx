@@ -3,17 +3,22 @@ import { useNavigate } from "react-router-dom";
 import { useData } from "../data/DataProvider";
 import type { Task } from "../data/types";
 import { AnchoredPopover } from "./AnchoredPopover";
+import { ConfirmButton } from "./ConfirmButton";
 import { MLabel } from "./ui";
 
 // Секция «Заметки» в инспекторе задачи: прикреплённые заметки + пикер
 // «＋ прикрепить» (поиск заметки по названию). Клик по заметке ведёт в неё.
 export function TaskNotes({ task }: { task: Task }) {
-  const { notes, taskNotes, createTaskNote, removeTaskNote } = useData();
+  const { tasks, notes, taskNotes, createTaskNote, removeTaskNote } = useData();
   const navigate = useNavigate();
   const addRef = useRef<HTMLButtonElement>(null);
   const [picking, setPicking] = useState(false);
 
-  const linked = taskNotes.filter((tn) => tn.taskId === task.id);
+  // привязки логической задачи: у серии повторов видны на всех вхождениях
+  const linked = taskNotes.filter((tn) => tn.logicalId === task.logicalId);
+  const isSeries =
+    [...tasks.values()].filter((t) => t.logicalId === task.logicalId).length >
+    1;
 
   // уходим в заметку не закрывая инспектор: ?task остаётся в записи истории,
   // поэтому «назад» из заметки вернёт открытую задачу
@@ -51,14 +56,19 @@ export function TaskNotes({ task }: { task: Task }) {
                 >
                   {note?.title?.trim() || "Без названия"}
                 </button>
-                <button
-                  type="button"
+                <ConfirmButton
                   className="row-btn row-btn-danger"
                   title="Открепить заметку"
-                  onClick={() => void removeTaskNote(tn.id)}
+                  message={
+                    isSeries
+                      ? "Открепить заметку от всей серии повторов?"
+                      : "Открепить заметку от задачи?"
+                  }
+                  confirmLabel="Открепить"
+                  onConfirm={() => void removeTaskNote(tn.id)}
                 >
                   ✕
-                </button>
+                </ConfirmButton>
               </div>
             );
           })}

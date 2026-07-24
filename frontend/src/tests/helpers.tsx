@@ -42,8 +42,8 @@ export function demoProject(p: Partial<Project> = {}): Project {
 }
 
 export function demoTask(p: Partial<Task> = {}): Task {
+  const id = p.id ?? nextId++;
   return {
-    id: nextId++,
     parentId: null,
     projectId: 1,
     title: `задача ${nextId}`,
@@ -58,8 +58,10 @@ export function demoTask(p: Partial<Task> = {}): Task {
     position: 0,
     dayPosition: null,
     repeat: null,
-    seriesId: null,
     ...p,
+    id,
+    // logicalId обязателен: по умолчанию своя логическая задача (= id)
+    logicalId: p.logicalId ?? id,
   };
 }
 
@@ -111,8 +113,10 @@ export function stubApi(
       if (path === "/api/task-notes") return json({ taskNotes });
     }
     if (path === "/api/task-notes" && method === "POST") {
+      // как бэкенд: физический taskId резолвится в логический якорь
       const b = body as { taskId: number; noteId: number };
-      const tn = { id: nextTaskNoteId++, taskId: b.taskId, noteId: b.noteId };
+      const logicalId = byId.get(b.taskId)?.logicalId ?? b.taskId;
+      const tn = { id: nextTaskNoteId++, logicalId, noteId: b.noteId };
       taskNotes = [...taskNotes, tn];
       return json({ taskNote: tn });
     }

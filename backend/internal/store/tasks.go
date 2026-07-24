@@ -35,7 +35,7 @@ type Task struct {
 	Position    int
 	DayPosition *int
 	Repeat      *string // JSON {"kind":"weekly","days":[1..7]} — правило повтора живой задачи серии
-	SeriesID    *int64  // якорь серии: id первой задачи; наследуется при спавне
+	LogicalID   int64   // id логической задачи: у разовой — свой id, у серии повторов общий (id первой задачи); к нему цепляются привязки
 	CreatedAt   string
 	UpdatedAt   string
 }
@@ -293,9 +293,11 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	}
 
 	ts := now()
+	// logical_id = свой id: значение неизвестно до INSERT, поэтому вставляем
+	// плейсхолдер 0 и тут же присваиваем в той же транзакции
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, logical_id, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		r.ParentID, projectID, r.Title, r.Description, r.ScheduledOn, r.EndOn, r.SoftDueOn, r.DueOn, r.TypeID, r.AssigneeID, pos, dayPos, ts, ts,
 	)
 	if err != nil {
@@ -303,6 +305,9 @@ func CreateTask(db *sql.DB, r CreateReq) (Task, []Task, error) {
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
+		return Task{}, nil, err
+	}
+	if _, err := tx.Exec(`UPDATE tasks SET logical_id = id WHERE id = ?`, id); err != nil {
 		return Task{}, nil, err
 	}
 
@@ -385,28 +390,21 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			// у задачи, будущие вхождения — призраки от новой даты
 			doneFlip := r.Done != nil && *r.Done && !cur.Done
 			if doneFlip {
-				// legacy-повтор без якоря серии: заякорить на себя,
-				// чтобы спавн унаследовал связь
-				if cur.SeriesID == nil {
-					cur.SeriesID = &id
-				}
 				spawnDate = nextOccurrence(maxISO(*cur.ScheduledOn, todayISO()), rule.Days)
 				// не приземляемся на день, уже занятый другим живым
 				// вхождением серии (разовые переносы занимают дни)
-				if cur.SeriesID != nil {
-					for range 53 {
-						var n int
-						if err := tx.QueryRow(
-							`SELECT count(*) FROM tasks WHERE series_id = ? AND scheduled_on = ? AND done = 0 AND deleted_at IS NULL AND id != ?`,
-							*cur.SeriesID, spawnDate, id,
-						).Scan(&n); err != nil {
-							return nil, err
-						}
-						if n == 0 {
-							break
-						}
-						spawnDate = nextOccurrence(spawnDate, rule.Days)
+				for range 53 {
+					var n int
+					if err := tx.QueryRow(
+						`SELECT count(*) FROM tasks WHERE logical_id = ? AND scheduled_on = ? AND done = 0 AND deleted_at IS NULL AND id != ?`,
+						cur.LogicalID, spawnDate, id,
+					).Scan(&n); err != nil {
+						return nil, err
 					}
+					if n == 0 {
+						break
+					}
+					spawnDate = nextOccurrence(spawnDate, rule.Days)
 				}
 				spawnRule = *cur.Repeat
 				cur.Repeat = nil
@@ -448,11 +446,8 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 			}
 			m := marshalRepeat(*r.Repeat)
 			cur.Repeat = &m
-			// якорь серии: серия начинается с этой задачи; при снятии
-			// правила якорь остаётся — история серии связана
-			if cur.SeriesID == nil {
-				cur.SeriesID = &id
-			}
+			// якорить серию отдельно не нужно: logical_id есть у всех задач
+			// с создания, спавн его наследует — история серии связана всегда
 		} else {
 			cur.Repeat = nil
 		}
@@ -500,8 +495,8 @@ func UpdateTask(db *sql.DB, id int64, r UpdateReq) ([]Task, error) {
 		}
 	}
 	if _, err := tx.Exec(
-		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, repeat = ?, series_id = ?, updated_at = ? WHERE id = ?`,
-		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, cur.Repeat, cur.SeriesID, now(), id,
+		`UPDATE tasks SET title = ?, description = ?, done = ?, end_on = ?, soft_due_on = ?, due_on = ?, type_id = ?, assignee_id = ?, repeat = ?, updated_at = ? WHERE id = ?`,
+		cur.Title, cur.Description, cur.Done, cur.EndOn, cur.SoftDueOn, cur.DueOn, cur.TypeID, cur.AssigneeID, cur.Repeat, now(), id,
 	); err != nil {
 		return nil, err
 	}
@@ -696,9 +691,9 @@ func spawnSeriesCopy(tx *sql.Tx, src Task, rule, dateISO string, affected map[in
 	}
 	ts := now()
 	res, err := tx.Exec(
-		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, repeat, series_id, type_id, assignee_id, position, day_position, created_at, updated_at)
+		`INSERT INTO tasks (parent_id, project_id, title, description, done, scheduled_on, repeat, logical_id, type_id, assignee_id, position, day_position, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.SeriesID, src.TypeID, src.AssigneeID, pos, dayPos, ts, ts,
+		src.ParentID, src.ProjectID, src.Title, src.Description, dateISO, rule, src.LogicalID, src.TypeID, src.AssigneeID, pos, dayPos, ts, ts,
 	)
 	if err != nil {
 		return err
@@ -722,9 +717,11 @@ func copyChildren(tx *sql.Tx, fromParent, toParent, projectID int64, affected ma
 	}
 	ts := now()
 	for i, c := range children {
+		// копия подзадачи — самостоятельная логическая задача: logical_id =
+		// свой id (плейсхолдер 0 → присвоение в той же транзакции)
 		res, err := tx.Exec(
-			`INSERT INTO tasks (parent_id, project_id, title, description, done, type_id, assignee_id, position, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+			`INSERT INTO tasks (parent_id, project_id, title, description, done, type_id, assignee_id, position, logical_id, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?)`,
 			toParent, projectID, c.Title, c.Description, c.TypeID, c.AssigneeID, i, ts, ts,
 		)
 		if err != nil {
@@ -732,6 +729,9 @@ func copyChildren(tx *sql.Tx, fromParent, toParent, projectID int64, affected ma
 		}
 		newID, err := res.LastInsertId()
 		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE tasks SET logical_id = id WHERE id = ?`, newID); err != nil {
 			return err
 		}
 		affected[newID] = true
@@ -799,13 +799,13 @@ func repaintSubtree(e interface {
 
 // ── помощники ──
 
-const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, repeat, series_id, created_at, updated_at FROM tasks`
+const taskSelect = `SELECT id, parent_id, project_id, title, description, done, scheduled_on, end_on, soft_due_on, due_on, type_id, assignee_id, position, day_position, repeat, logical_id, created_at, updated_at FROM tasks`
 
 func scanTasks(rows *sql.Rows) ([]Task, error) {
 	var out []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.Repeat, &t.SeriesID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParentID, &t.ProjectID, &t.Title, &t.Description, &t.Done, &t.ScheduledOn, &t.EndOn, &t.SoftDueOn, &t.DueOn, &t.TypeID, &t.AssigneeID, &t.Position, &t.DayPosition, &t.Repeat, &t.LogicalID, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

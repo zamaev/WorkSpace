@@ -34,14 +34,16 @@ export type LinkType = {
 
 export type TaskLink = {
   id: number;
-  fromId: number;
-  toId: number;
+  // концы связи — ЛОГИЧЕСКИЕ задачи (у серии повторов одна на все вхождения)
+  fromLogicalId: number;
+  toLogicalId: number;
   typeId: number;
 };
 
 export type TaskNote = {
   id: number;
-  taskId: number;
+  // привязка живёт на логической задаче: у серии видна на всех вхождениях
+  logicalId: number;
   noteId: number;
 };
 
@@ -84,7 +86,8 @@ export type Task = {
   position: number;
   dayPosition: number | null;
   repeat: RepeatRule | null;
-  seriesId: number | null;
+  // id логической задачи: у разовой — свой id, у серии повторов общий
+  logicalId: number;
 };
 
 // Частичное обновление; null значим для scheduledOn (снять дату)

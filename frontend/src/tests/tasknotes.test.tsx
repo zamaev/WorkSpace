@@ -46,13 +46,18 @@ describe("привязка заметок к задачам", () => {
     expect(await screen.findByTitle("Открепить заметку")).toBeDefined();
   });
 
-  it("открепление: ✕ → DELETE, строка исчезает", async () => {
+  it("открепление: ✕ → попап → «Открепить» → DELETE, строка исчезает", async () => {
     const log = stubApi([demoTask({ id: 10, title: "цель" })], [demoProject()], {
       notes: [demoNote({ id: 5, title: "Личное" })],
-      taskNotes: [{ id: 1, taskId: 10, noteId: 5 }],
+      taskNotes: [{ id: 1, logicalId: 10, noteId: 5 }],
     });
     renderAt("/projects/1?task=10", "/projects/:pid?", <ProjectsView />);
     fireEvent.click(await screen.findByTitle("Открепить заметку"));
+    // сам клик по ✕ ничего не удаляет — открывает попап подтверждения
+    expect(
+      log.find((l) => l.method === "DELETE"),
+    ).toBeUndefined();
+    fireEvent.click(await screen.findByText("Открепить"));
     await waitFor(() => {
       expect(
         log.find(
@@ -66,7 +71,7 @@ describe("привязка заметок к задачам", () => {
   it("чип задачи в заметке ведёт к задаче (?task в URL, focus в state)", async () => {
     stubApi([demoTask({ id: 10, title: "цель" })], [demoProject()], {
       notes: [demoNote({ id: 5, title: "Личное" })],
-      taskNotes: [{ id: 1, taskId: 10, noteId: 5 }],
+      taskNotes: [{ id: 1, logicalId: 10, noteId: 5 }],
     });
     const probe: { path: string; search: string; state?: unknown } = {
       path: "",
@@ -107,6 +112,65 @@ describe("привязка заметок к задачам", () => {
   });
 });
 
+describe("привязка к логической задаче (серия повторов)", () => {
+  // серия: прошлое done-вхождение id=10 и живое id=20, общий logicalId=10
+  const series = () => [
+    demoTask({ id: 10, title: "планёрка", logicalId: 10, done: true }),
+    demoTask({ id: 20, title: "планёрка", logicalId: 10 }),
+  ];
+
+  it("заметка серии видна в инспекторе любого вхождения", async () => {
+    stubApi(series(), [demoProject()], {
+      notes: [demoNote({ id: 5, title: "Протокол" })],
+      taskNotes: [{ id: 1, logicalId: 10, noteId: 5 }],
+    });
+    // открываем НОВОЕ вхождение (id=20) — привязка висит на logicalId=10
+    renderAt("/projects/1?task=20", "/projects/:pid?", <ProjectsView />);
+    expect(await screen.findByTitle("Открепить заметку")).toBeDefined();
+    expect(screen.getByText("Протокол")).toBeDefined();
+  });
+
+  it("чип в заметке ведёт к последнему вхождению серии", async () => {
+    stubApi(series(), [demoProject()], {
+      notes: [demoNote({ id: 5, title: "Протокол" })],
+      taskNotes: [{ id: 1, logicalId: 10, noteId: 5 }],
+    });
+    const probe: { path: string; search: string } = { path: "", search: "" };
+    renderAt(
+      "/notes/5",
+      "/notes/:id?",
+      <NoteTasks noteId={5} />,
+      <LocationProbe into={probe} />,
+    );
+    fireEvent.click(await screen.findByTitle("Перейти к задаче"));
+    await waitFor(() => {
+      // представитель — последнее созданное вхождение (id=20), не прошлое
+      expect(probe.search).toBe("?task=20");
+    });
+  });
+
+  it("пикер схлопывает серию: одно совпадение — последнее вхождение", async () => {
+    const log = stubApi(series(), [demoProject()], {
+      notes: [demoNote({ id: 5, title: "Протокол" })],
+    });
+    renderAt("/notes/5", "/notes/:id?", <NoteTasks noteId={5} />);
+    fireEvent.click(await screen.findByText("＋ задача"));
+    fireEvent.change(screen.getByLabelText("Поиск задачи"), {
+      target: { value: "планёрка" },
+    });
+    const options = await screen.findAllByText("планёрка");
+    expect(options.length).toBe(1); // не два вхождения, а одна логическая
+    fireEvent.click(options[0]);
+    await waitFor(() => {
+      const post = log.find(
+        (l) => l.method === "POST" && l.path === "/api/task-notes",
+      );
+      // прикрепление шлёт id последнего вхождения — сервер резолвит логический
+      expect(post?.body).toEqual({ taskId: 20, noteId: 5 });
+    });
+  });
+});
+
 // Хелперы: дёргают remove/removeNote из DataProvider, чтобы проверить
 // локальную чистку привязок без перезагрузки (мёртвые строки/чипы).
 function NoteSideHarness({ noteId }: { noteId: number }) {
@@ -138,7 +202,7 @@ describe("чистка привязок при удалении", () => {
   it("удаление задачи убирает её чип из заметки без перезагрузки", async () => {
     stubApi([demoTask({ id: 10, title: "цель" })], [demoProject()], {
       notes: [demoNote({ id: 5, title: "Личное" })],
-      taskNotes: [{ id: 1, taskId: 10, noteId: 5 }],
+      taskNotes: [{ id: 1, logicalId: 10, noteId: 5 }],
     });
     renderAt("/notes/5", "/notes/:id?", <NoteSideHarness noteId={5} />);
     expect(await screen.findByTitle("Перейти к задаче")).toBeDefined();
@@ -151,7 +215,7 @@ describe("чистка привязок при удалении", () => {
   it("удаление заметки убирает её строку из инспектора без перезагрузки", async () => {
     stubApi([demoTask({ id: 10, title: "цель" })], [demoProject()], {
       notes: [demoNote({ id: 5, title: "Личное" })],
-      taskNotes: [{ id: 1, taskId: 10, noteId: 5 }],
+      taskNotes: [{ id: 1, logicalId: 10, noteId: 5 }],
     });
     renderAt("/projects/1", "/projects/:pid?", <TaskSideHarness />);
     expect(await screen.findByTitle("Открепить заметку")).toBeDefined();

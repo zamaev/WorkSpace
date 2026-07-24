@@ -36,7 +36,7 @@ function task(
     position: id,
     dayPosition: null,
     repeat: null,
-    seriesId: null,
+    logicalId: id,
   };
 }
 

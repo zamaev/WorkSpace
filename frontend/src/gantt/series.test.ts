@@ -3,8 +3,8 @@ import { collapseSeries } from "./series";
 import type { Task } from "../data/types";
 
 function task(p: Partial<Task>): Task {
+  const id = p.id ?? 1;
   return {
-    id: 1,
     parentId: null,
     projectId: 1,
     title: "t",
@@ -19,8 +19,10 @@ function task(p: Partial<Task>): Task {
     position: 0,
     dayPosition: null,
     repeat: null,
-    seriesId: null,
     ...p,
+    id,
+    // logicalId обязателен: по умолчанию своя логическая задача (= id)
+    logicalId: p.logicalId ?? id,
   };
 }
 
@@ -31,20 +33,20 @@ describe("collapseSeries", () => {
       title: "синк",
       done: true,
       scheduledOn: "2030-01-07",
-      seriesId: 1,
+      logicalId: 1,
     });
     const d2 = task({
       id: 2,
       title: "синк",
       done: true,
       scheduledOn: "2030-01-10",
-      seriesId: 1,
+      logicalId: 1,
     });
     const live = task({
       id: 3,
       title: "синк",
       scheduledOn: "2030-01-14",
-      seriesId: 1,
+      logicalId: 1,
       repeat: { kind: "weekly", days: [1, 4] },
     });
     const other = task({ id: 9, title: "обычная" });
@@ -66,13 +68,13 @@ describe("collapseSeries", () => {
       id: 1,
       done: true,
       scheduledOn: "2030-01-07",
-      seriesId: 1,
+      logicalId: 1,
     });
     const d2 = task({
       id: 2,
       done: true,
       scheduledOn: "2030-01-10",
-      seriesId: 1,
+      logicalId: 1,
     });
     const { rows } = collapseSeries([
       { task: d1, depth: 0 },

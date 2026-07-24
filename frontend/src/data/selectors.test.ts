@@ -14,8 +14,8 @@ import {
 
 let nextId = 1;
 function task(p: Partial<Task>): Task {
+  const id = p.id ?? nextId++;
   return {
-    id: nextId++,
     parentId: null,
     projectId: 1,
     title: `t${nextId}`,
@@ -25,13 +25,15 @@ function task(p: Partial<Task>): Task {
     endOn: null,
     softDueOn: null,
     repeat: null,
-    seriesId: null,
     dueOn: null,
     typeId: null,
     assigneeId: null,
     position: 0,
     dayPosition: null,
     ...p,
+    id,
+    // logicalId обязателен: по умолчанию своя логическая задача (= id)
+    logicalId: p.logicalId ?? id,
   };
 }
 

@@ -77,6 +77,9 @@ type Store = {
   removePerson: (id: number) => Promise<void>;
   createNote: (title: string, parentId: number | null) => Promise<Note | null>;
   patchNote: (id: number, p: NotePatch) => Promise<void>;
+  // мгновенное локальное обновление заметки без запроса на сервер — для
+  // синхронного отражения ввода заголовка в дереве и редакторе одновременно
+  patchNoteLocal: (id: number, p: NotePatch) => void;
   removeNote: (id: number) => Promise<void>;
   createLink: (fromId: number, toId: number, typeId: number) => Promise<void>;
   removeLink: (id: number) => Promise<void>;
@@ -113,7 +116,7 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
     position,
     dayPosition,
     repeat,
-    seriesId,
+    logicalId,
   } = t;
   return {
     id,
@@ -131,7 +134,7 @@ function stripTask(t: Task & { createdAt?: string; updatedAt?: string }): Task {
     position,
     dayPosition,
     repeat: repeat ?? null,
-    seriesId: seriesId ?? null,
+    logicalId,
   };
 }
 
@@ -299,10 +302,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         return next;
       });
-      setTaskLinks((prev) =>
-        prev.filter((l) => !doomed.has(l.fromId) && !doomed.has(l.toId)),
+      // связи и привязки живут на логической задаче: прячем только если после
+      // удаления не осталось ни одного живого вхождения с этим logicalId
+      // (удаление прошлого вхождения серии связь/заметку скрывать не должно)
+      const liveLogical = new Set(
+        [...tasks.values()]
+          .filter((t) => !doomed.has(t.id))
+          .map((t) => t.logicalId),
       );
-      setTaskNotes((prev) => prev.filter((tn) => !doomed.has(tn.taskId)));
+      setTaskLinks((prev) =>
+        prev.filter(
+          (l) =>
+            liveLogical.has(l.fromLogicalId) && liveLogical.has(l.toLogicalId),
+        ),
+      );
+      setTaskNotes((prev) => prev.filter((tn) => liveLogical.has(tn.logicalId)));
       try {
         await api.deleteTask(id);
       } catch (e) {
@@ -727,6 +741,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [notes, mergeNotes, toast, restoreNotes],
   );
 
+  const patchNoteLocal = useCallback((id: number, p: NotePatch) => {
+    setNotes((prev) => {
+      const cur = prev.get(id);
+      if (!cur) return prev;
+      return new Map(prev).set(id, { ...cur, ...p });
+    });
+  }, []);
+
   const removeNote = useCallback(
     async (id: number) => {
       const doomed = new Set(noteSubtreeIds(notes, id));
@@ -824,6 +846,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notes,
       createNote,
       patchNote,
+      patchNoteLocal,
       removeNote,
       linkTypes,
       taskLinks,
@@ -867,6 +890,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notes,
       createNote,
       patchNote,
+      patchNoteLocal,
       removeNote,
       linkTypes,
       taskLinks,
